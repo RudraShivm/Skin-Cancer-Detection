@@ -1,0 +1,19 @@
+_target_: src.data.isic_datamodule.ISICDataModule
+
+# Paths (will be resolved by paths config)
+data_dir: ${paths.data_dir}/isic-2024-challenge
+hdf5_file: train-image.hdf5
+metadata_file: train-metadata.csv
+
+# DataLoader settings
+batch_size: 32
+num_workers: 4
+pin_memory: True
+persistent_workers: True
+
+# Cross-validation
+fold: 0
+n_folds: 5
+
+# Image settings
+img_size: 224

@@ -1,0 +1,49 @@
+# @package _global_
+
+# Specify defaults
+# Order matters - later defaults override earlier ones
+defaults:
+  - _self_
+  - data: isic2024  # Changed from mnist
+  - model: efficientnet_b0  # Changed from mnist
+  - callbacks: default
+  - logger: tensorboard  # or many_loggers
+  - trainer: default
+  - paths: default
+  - extras: default
+  - hydra: default
+
+  # Experiment configs allow for version control of specific hyperparameters
+  # e.g. best hyperparameters for given model and datamodule
+  - experiment: null
+
+  # Config for hyperparameter optimization
+  - hparams_search: null
+
+  # Optional local config for machine/user specific settings
+  # It's optional since it doesn't need to exist and is excluded from version control
+  - optional local: default
+
+  # Debugging config (enable through command line, e.g. `python train.py debug=default`)
+  - debug: null
+
+# Task name for organizing experiments
+task_name: "train"
+
+# Tags to help you identify your experiments
+tags: ["dev"]
+
+# Set false to skip training
+train: True
+
+# Evaluate after training
+test: True
+
+# Compile model for faster training with pytorch 2.0
+compile: False
+
+# Checkpoint to resume training from
+ckpt_path: null
+
+# Seed for reproducibility
+seed: 42

@@ -1,0 +1,13 @@
+# Path to project root
+work_dir: ${hydra:runtime.cwd}
+
+# Path to data directory
+data_dir: ${paths.work_dir}/data
+
+# Path to output directory (for logs and checkpoints)
+output_dir: ${paths.work_dir}/logs
+
+# Path to checkpoints directory
+ckpt_dir: ${paths.output_dir}/checkpoints
+
+log_dir: ${paths.work_dir}/logs
