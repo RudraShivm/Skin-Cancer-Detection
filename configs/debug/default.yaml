@@ -34,3 +34,4 @@ data:
   persistent_workers: False
   num_workers: 0 # debuggers don't like multiprocessing
   pin_memory: False # disable gpu memory pin
+  data_fraction: 0.01

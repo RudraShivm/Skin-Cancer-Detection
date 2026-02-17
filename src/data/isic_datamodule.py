@@ -58,7 +58,7 @@ class ISICDataset(Dataset):
         }
     
     def __del__(self):
-        if hasattr(self, 'hdf5'):
+        if hasattr(self, 'hdf5') and self.hdf5 is not None:
             self.hdf5.close()
 
 
@@ -92,6 +92,7 @@ class ISICDataModule(L.LightningDataModule):
         fold: int = 0,
         n_folds: int = 5,
         img_size: int = 224,
+        data_fraction: float = 1.0,
     ):
         """Initialize ISIC DataModule.
         
@@ -106,6 +107,7 @@ class ISICDataModule(L.LightningDataModule):
             fold: Which fold to use for validation (0-4)
             n_folds: Total number of folds
             img_size: Image size for resizing
+            data_fraction: Fraction of dataset to use (0.0 to 1.0)
         """
         super().__init__()
         
@@ -139,6 +141,21 @@ class ISICDataModule(L.LightningDataModule):
         """
         # Load metadata
         df = pd.read_csv(self.metadata_path, low_memory=False)
+        
+        # Apply data fraction sampling
+        if self.hparams.data_fraction < 1.0:
+            # Sample fraction but keep class balance
+            # Use 'target' if present, otherwise random sample
+            if 'target' in df.columns:
+                pos = df[df['target'] == 1]
+                neg = df[df['target'] == 0]
+                
+                pos = pos.sample(frac=self.hparams.data_fraction, random_state=42)
+                neg = neg.sample(frac=self.hparams.data_fraction, random_state=42)
+                
+                df = pd.concat([pos, neg]).sample(frac=1, random_state=42).reset_index(drop=True)
+            else:
+                df = df.sample(frac=self.hparams.data_fraction, random_state=42).reset_index(drop=True)
         
         # Create folds if not present
         if 'fold' not in df.columns:
@@ -204,9 +221,12 @@ class ISICDataModule(L.LightningDataModule):
 
 if __name__ == "__main__":
     """For testing the datamodule."""
-    dm = ISICDataModule(data_dir="data/isic-2024-challenge")
+    dm = ISICDataModule(data_dir="data/isic-2024-challenge", data_fraction=0.01)
     dm.prepare_data()
     dm.setup()
+    
+    print(f"Train dataset size: {len(dm.data_train)}")
+    print(f"Val dataset size: {len(dm.data_val)}")
     
     # Test one batch
     batch = next(iter(dm.train_dataloader()))

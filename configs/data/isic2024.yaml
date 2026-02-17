@@ -10,6 +10,7 @@ batch_size: 32
 num_workers: 4
 pin_memory: True
 persistent_workers: True
+data_fraction: 1
 
 # Cross-validation
 fold: 0

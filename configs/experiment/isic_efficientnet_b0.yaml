@@ -32,7 +32,8 @@ data:
   num_workers: 4
   fold: 0
   img_size: 224
-
+  data_fraction: 1
+  
 callbacks:
   model_checkpoint:
     monitor: "val/auroc"
