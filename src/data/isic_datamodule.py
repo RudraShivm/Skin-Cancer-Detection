@@ -138,7 +138,7 @@ class ISICDataModule(L.LightningDataModule):
         so be careful not to execute things like random split twice!
         """
         # Load metadata
-        df = pd.read_csv(self.metadata_path)
+        df = pd.read_csv(self.metadata_path, low_memory=False)
         
         # Create folds if not present
         if 'fold' not in df.columns:
