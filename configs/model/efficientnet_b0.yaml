@@ -1,5 +1,6 @@
 _target_: src.models.isic_module.ISICLitModule
 
+name: efficientnet_b0
 backbone: tf_efficientnet_b0_ns
 num_classes: 1
 pretrained: true

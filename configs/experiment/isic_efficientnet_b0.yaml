@@ -14,6 +14,9 @@ defaults:
 
 tags: ["isic2024", "efficientnet_b0", "baseline"]
 
+# Experiment name (auto-generated from config if not set)
+experiment_name: ${model.name}_fold${data.fold}
+
 seed: 42
 
 trainer:
