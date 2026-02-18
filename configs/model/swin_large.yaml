@@ -1,0 +1,10 @@
+_target_: src.models.isic_module.ISICLitModule
+
+name: swin_large
+backbone: swin_large_patch4_window7_224.ms_in22k_ft_in1k
+num_classes: 1
+pretrained: true
+lr: 0.00005
+weight_decay: 0.05
+max_epochs: ${trainer.max_epochs}
+dropout: 0.3

@@ -1,0 +1,264 @@
+# Skin Cancer Detection — Reference Documentation
+
+## Model Configurations
+
+| Model | Config File | TIMM Backbone | Default img_size | Default batch_size |
+|-------|-----------|---------------|-----------------|-------------------|
+| EfficientNet-B0 | `configs/model/efficientnet_b0.yaml` | `tf_efficientnet_b0_ns` | 224 | 32 |
+| EfficientNetV2-L | `configs/model/efficientnetv2_l.yaml` | `tf_efficientnetv2_l.in21k_ft_in1k` | 384 | 16 |
+| ConvNeXt-Large | `configs/model/convnext_large.yaml` | `convnext_large.fb_in22k_ft_in1k` | 224 | 16 |
+| ConvNeXt-Tiny | `configs/model/convnext_tiny.yaml` | `convnext_tiny` | 224 | 32 |
+| EVA02-Large | `configs/model/eva02_large.yaml` | `eva02_large_patch14_448.mim_in22k_ft_in1k` | 448 | 8 |
+| Swin-Large | `configs/model/swin_large.yaml` | `swin_large_patch4_window7_224.ms_in22k_ft_in1k` | 224 | 16 |
+
+Each model config specifies a TIMM backbone name, default hyperparameters (lr, weight_decay, dropout), and `num_classes: 1` for binary classification. All backbones are ImageNet-pretrained.
+
+Each model has a corresponding experiment config in `configs/experiment/isic_{model_name}.yaml` which sets the complete training configuration including data, callbacks, logger, and trainer settings.
+
+---
+
+## Checkpoint Directory Structure
+
+```
+checkpoints/
+├── efficientnet_b0/
+│   ├── fold_0/
+│   │   ├── epoch_015_auroc_0.9234.ckpt    ← best checkpoint (by val/auroc)
+│   │   └── last.ckpt                       ← last epoch checkpoint
+│   ├── fold_1/
+│   │   ├── epoch_012_auroc_0.9189.ckpt
+│   │   └── last.ckpt
+│   └── ...
+├── convnext_large/
+│   ├── fold_0/
+│   └── ...
+└── ...
+```
+
+- **Best checkpoint**: Named `epoch_{N}_auroc_{value}.ckpt`, selected by `ModelCheckpoint(monitor="val/auroc", mode="max", save_top_k=1)`
+- **Last checkpoint**: Always saved as `last.ckpt` for resume capability
+- Checkpoint path is set via Hydra override: `callbacks.model_checkpoint.dirpath=checkpoints/{model_name}/fold_{fold}`
+
+### What's stored in each checkpoint
+
+- Model weights
+- Optimizer state
+- All hyperparameters (via `save_hyperparameters()`)
+- `best_threshold` — the optimal classification threshold found from the ROC curve (registered buffer)
+- `best_auroc` — the best validation AUROC achieved (used as weight in ensemble)
+
+---
+
+## Optimal Threshold
+
+### How it's computed
+
+At the end of each validation epoch, the full ROC curve is computed using `torchmetrics.BinaryROC`. The optimal threshold is the one where `(TPR, FPR)` is closest to the ideal point `(1, 0)`:
+
+```
+distance = sqrt((1 - TPR)² + FPR²)
+optimal_threshold = threshold[argmin(distance)]
+```
+
+### Where it's stored
+
+- **In the checkpoint**: Stored as a registered buffer `model.best_threshold` — automatically saved/loaded with the checkpoint
+- **In WandB**: Logged as `val/best_threshold` and `val/optimal_threshold` each epoch
+- **During inference**: Automatically used by `predict_step()` and `ensemble_predict.py`
+
+### What it means
+
+The default threshold of 0.5 for binary classification is rarely optimal for imbalanced datasets. The optimal threshold maximizes the trade-off between sensitivity (TPR) and specificity (1-FPR), which is critical for medical image classification.
+
+---
+
+## WandB Integration
+
+### Metrics Logged
+
+| Metric | Description |
+|--------|-------------|
+| `train/loss` | Training loss per epoch |
+| `train/auroc` | Training AUROC per epoch |
+| `val/loss` | Validation loss per epoch |
+| `val/auroc` | Validation AUROC per epoch |
+| `val/auroc_best` | Best validation AUROC so far |
+| `val/best_threshold` | Optimal threshold from ROC curve |
+| `roc_curve/epoch_N` | Interactive ROC curve for epoch N |
+
+### Viewing AUROC Curves in WandB
+
+1. Go to your WandB project (`isic-2024`)
+2. Click on a run (named `{model_name}_fold{N}`)
+3. Navigate to **Charts** → Filter for `roc_curve` to see per-epoch ROC curves
+4. To compare folds: select multiple runs → **Compare** view
+5. The ROC curves show the full TPR vs FPR trade-off with the optimal threshold marked in the title
+
+### Downloading Checkpoints from WandB Artifacts
+
+**Via WandB UI:**
+1. Go to project → **Artifacts** tab
+2. Find the model artifact (e.g., `model-{run_id}`)
+3. Click **Files** → Download the `.ckpt` file
+
+**Programmatically:**
+```python
+import wandb
+
+api = wandb.Api()
+# List all artifacts
+artifacts = api.artifacts("your-entity/isic-2024", type_name="model")
+for art in artifacts:
+    print(art.name, art.state)
+
+# Download a specific artifact
+artifact = api.artifact("your-entity/isic-2024/model-{run_id}:v0")
+artifact_dir = artifact.download("./downloaded_checkpoints/")
+```
+
+### Resume Training from WandB Checkpoint
+
+1. Download the checkpoint (see above)
+2. Run training with `ckpt_path` override:
+```bash
+python src/train.py experiment=isic_efficientnet_b0 \
+    ckpt_path=path/to/downloaded/checkpoint.ckpt \
+    data.fold=0
+```
+
+Or in the notebook, add to hydra overrides:
+```python
+hydra_overrides.append(f"ckpt_path={path_to_ckpt}")
+```
+
+---
+
+## Ensemble Prediction
+
+### CLI Usage
+
+```bash
+# Auto img_size, soft voting (default)
+python src/ensemble_predict.py \
+    --models efficientnet_b0 \
+    --checkpoint-dir checkpoints/ \
+    --image-paths img1.jpg img2.jpg
+
+# Multi-model ensemble with hard weighted voting
+python src/ensemble_predict.py \
+    --models efficientnet_b0 convnext_large swin_large \
+    --checkpoint-dir checkpoints/ \
+    --image-dir test_images/ \
+    --strategy hard_weighted \
+    --output-csv results.csv
+
+# Override image size (disables auto-detection)
+python src/ensemble_predict.py \
+    --models eva02_large \
+    --checkpoint-dir checkpoints/ \
+    --image-paths test.jpg \
+    --img-size 448
+```
+
+### Ensemble Strategies
+
+| Strategy | Description |
+|----------|-------------|
+| `soft` (default) | Average probabilities across all folds/models, then apply averaged threshold |
+| `hard_weighted` | Apply per-checkpoint threshold to get binary predictions, then weighted average using each fold's AUROC as weight. The resulting fraction is a confidence score |
+
+### How it works
+
+1. For each specified model, auto-discovers available `fold_N/` subdirectories
+2. For each fold, finds the best checkpoint (highest AUROC from filename, or `last.ckpt`)
+3. Loads the checkpoint (which contains `best_threshold`, `best_auroc`, and backbone name)
+4. **Auto-detects image size** from the TIMM backbone config (no manual `--img-size` needed)
+5. Each model is preprocessed at its correct resolution (e.g., 448 for EVA02, 224 for EfficientNet-B0)
+6. Applies selected ensemble strategy
+
+### CLI Arguments
+
+| Argument | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `--models` | Yes | — | Space-separated model names |
+| `--checkpoint-dir` | No | `checkpoints` | Base checkpoint directory |
+| `--image-paths` | No* | — | Space-separated image file paths |
+| `--image-dir` | No* | — | Directory of images to predict |
+| `--img-size` | No | auto-detect | Override image size (disables auto-detection) |
+| `--strategy` | No | `soft` | `soft` or `hard_weighted` |
+| `--device` | No | auto | `cuda` or `cpu` |
+| `--output-csv` | No | — | Save results to CSV |
+
+*At least one of `--image-paths` or `--image-dir` must be specified.
+
+---
+
+## Notebook Usage
+
+### Overriding Models to Train
+
+In Cell 4 of the notebook, modify `MODELS_TO_TRAIN`:
+
+```python
+# Train just one model
+MODELS_TO_TRAIN = ["efficientnet_b0"]
+
+# Train multiple models
+MODELS_TO_TRAIN = ["efficientnet_b0", "convnext_large", "swin_large"]
+
+# Train all available models
+MODELS_TO_TRAIN = ["efficientnet_b0", "efficientnetv2_l", "convnext_large", "eva02_large", "swin_large"]
+```
+
+### Multi-Fold Training
+
+Also in Cell 4:
+
+```python
+N_FOLDS = 5          # Train all 5 folds (for full cross-validation)
+N_FOLDS = 1          # Train only fold 0 (for quick testing)
+DATA_FRACTION = 0.1  # Use 10% of data (for quick testing)
+DATA_FRACTION = 1.0  # Use full dataset
+```
+
+### Inference Cell
+
+Cell 6 provides single-image and ensemble inference:
+
+```python
+# Single model inference
+USE_ENSEMBLE = False
+INFERENCE_MODEL = "efficientnet_b0"
+INFERENCE_FOLD = 0
+IMAGE_PATHS = ["/path/to/image.jpg"]
+
+# Ensemble inference
+USE_ENSEMBLE = True
+ENSEMBLE_MODELS = ["efficientnet_b0", "convnext_large"]
+IMAGE_PATHS = ["/path/to/image.jpg"]
+```
+
+---
+
+## Cross-Validation Setup
+
+- **5-fold stratified K-fold** split by patient ID (prevents data leakage between train/val)
+- Stratification is based on the target label (malignant/benign) at the patient level
+- The fold column is computed on-the-fly with a fixed `random_state=42` for reproducibility
+- `data.fold=N` selects fold N as validation, rest as training
+
+---
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/models/isic_module.py` | Lightning module with TIMM backbone, ROC threshold, WandB curves |
+| `src/data/isic_datamodule.py` | Data loading with HDF5, stratified K-fold, data fraction sampling |
+| `src/ensemble_predict.py` | Multi-model multi-fold ensemble inference CLI |
+| `src/train.py` | Hydra-based training entry point |
+| `configs/model/*.yaml` | Model backbone configurations |
+| `configs/experiment/isic_*.yaml` | Complete experiment configurations |
+| `configs/callbacks/default.yaml` | Checkpoint saving, early stopping configs |
+| `configs/logger/wandb.yaml` | WandB logger config (`log_model: "all"`) |
+| `notebooks/skin-cancer-detection.ipynb` | Kaggle/Colab/local training notebook |

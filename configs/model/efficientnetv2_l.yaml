@@ -1,10 +1,10 @@
 _target_: src.models.isic_module.ISICLitModule
 
-name: convnext_tiny
-backbone: convnext_tiny
+name: efficientnetv2_l
+backbone: tf_efficientnetv2_l.in21k_ft_in1k
 num_classes: 1
 pretrained: true
-lr: 0.0001
+lr: 0.00005
 weight_decay: 0.01
 max_epochs: ${trainer.max_epochs}
-dropout: 0.2
+dropout: 0.3

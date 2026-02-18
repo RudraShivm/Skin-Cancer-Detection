@@ -1,20 +1,14 @@
 # @package _global_
 
-# This experiment config overrides the base configs to define a specific experiment
-
 defaults:
   - override /data: isic2024
-  - override /model: efficientnet_b0
+  - override /model: swin_large
   - override /callbacks: default
   - override /logger: wandb
   - override /trainer: default
 
-# All parameters below will be merged with parameters from default configs
-# This allows you to overwrite only specified parameters
+tags: ["isic2024", "swin_large"]
 
-tags: ["isic2024", "efficientnet_b0", "baseline"]
-
-# Experiment name (auto-generated from config if not set)
 experiment_name: ${model.name}_fold${data.fold}
 
 seed: 42
@@ -24,20 +18,20 @@ trainer:
   max_epochs: 20
   gradient_clip_val: 1.0
   gradient_clip_algorithm: norm
-  precision: 16-mixed  # Mixed precision training
+  precision: 16-mixed
 
 model:
-  lr: 0.0001
-  weight_decay: 0.01
+  lr: 0.00005
+  weight_decay: 0.05
   dropout: 0.3
 
 data:
-  batch_size: 32
+  batch_size: 16
   num_workers: 4
   fold: 0
   img_size: 224
   data_fraction: 1
-  
+
 callbacks:
   model_checkpoint:
     monitor: "val/auroc"
@@ -45,7 +39,7 @@ callbacks:
     save_top_k: 1
     save_last: True
     filename: "epoch_{epoch:03d}_auroc_{val/auroc:.4f}"
-  
+
   early_stopping:
     monitor: "val/auroc"
     patience: 5
