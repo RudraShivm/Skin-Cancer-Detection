@@ -26,9 +26,14 @@ hydra:
 
 trainer:
   max_epochs: 1
-  accelerator: cpu # debuggers don't like gpus
+  accelerator: gpu
   devices: 1 # debuggers don't like multiprocessing
-  detect_anomaly: true # raise exception if NaN or +/-inf is detected in any tensor
+  # NOTE: detect_anomaly is incompatible with mixed precision (AMP) training.
+  # With AMP, occasional NaN gradients are expected and handled by the GradScaler
+  # (it skips the optimizer step and reduces the scale). detect_anomaly causes
+  # a RuntimeError on any NaN, breaking this mechanism entirely.
+  # detect_anomaly: true
+  precision: 16-mixed
 
 data:
   persistent_workers: False

@@ -23,7 +23,8 @@ trainer:
   min_epochs: 10
   max_epochs: 20
   gradient_clip_val: 1.0
-  precision: 16  # Mixed precision training
+  gradient_clip_algorithm: norm
+  precision: 16-mixed  # Mixed precision training
 
 model:
   lr: 0.0001

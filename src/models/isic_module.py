@@ -24,7 +24,8 @@ class ISICLitModule(LightningModule):
     
     def __init__(
         self,
-        backbone: str = "tf_efficientnet_b0_ns",
+        name: str,
+        backbone: str,
         num_classes: int = 1,
         pretrained: bool = True,
         lr: float = 1e-4,
@@ -103,7 +104,6 @@ class ISICLitModule(LightningModule):
         logits = self.forward(images).squeeze(1)
         loss = self.criterion(logits, targets)
         preds = torch.sigmoid(logits)
-        
         return loss, preds, targets
     
     def training_step(
