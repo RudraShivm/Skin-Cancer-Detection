@@ -268,7 +268,6 @@ class ISICLitModule(LightningModule):
                 "tpr",
                 title=f"ROC Curve | Epoch {epoch:03d} | AUROC={auroc_val:.4f} | threshold={optimal_threshold:.4f}",
             ),
-            "val/optimal_threshold": optimal_threshold,
         })
     
     def test_step(self, batch: Dict[str, Any], batch_idx: int) -> None:

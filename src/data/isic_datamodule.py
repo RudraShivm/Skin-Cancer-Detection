@@ -204,6 +204,7 @@ class ISICDataModule(L.LightningDataModule):
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
             persistent_workers=self.hparams.persistent_workers,
+            prefetch_factor=2 if self.hparams.num_workers > 0 else None,
             shuffle=True,
         )
     
@@ -215,6 +216,7 @@ class ISICDataModule(L.LightningDataModule):
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
             persistent_workers=self.hparams.persistent_workers,
+            prefetch_factor=2 if self.hparams.num_workers > 0 else None,
             shuffle=False,
         )
 
