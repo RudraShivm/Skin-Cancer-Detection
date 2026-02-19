@@ -260,12 +260,13 @@ class ISICLitModule(LightningModule):
         
         # Log ROC curve as a custom line plot
         auroc_val = self.val_auroc.compute().item()
+        epoch = self.current_epoch
         wandb.log({
-            f"roc_curve/epoch_{self.current_epoch}": wandb.plot.line(
+            f"roc_curve/epoch_{epoch:03d}": wandb.plot.line(
                 table,
                 "fpr",
                 "tpr",
-                title=f"ROC Curve (AUROC={auroc_val:.4f}, threshold={optimal_threshold:.4f})",
+                title=f"ROC Curve | Epoch {epoch:03d} | AUROC={auroc_val:.4f} | threshold={optimal_threshold:.4f}",
             ),
             "val/optimal_threshold": optimal_threshold,
         })

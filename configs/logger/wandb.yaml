@@ -8,7 +8,7 @@ wandb:
   offline: False
   id: null # pass correct id to resume experiment!
   anonymous: null # options: [allow, must]
-  log_model: "all" # upload checkpoint data to wandb
+  log_model: False # upload checkpoint data to wandb
   prefix: ""
   group: ""
   tags: []
