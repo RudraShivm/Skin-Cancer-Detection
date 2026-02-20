@@ -33,6 +33,7 @@ class ISICLitModule(LightningModule):
         weight_decay: float = 1e-2,
         max_epochs: int = 20,
         dropout: float = 0.0,
+        pos_weight: float = 1.0,
     ):
         """Initialize ISIC LitModule.
         
@@ -45,6 +46,9 @@ class ISICLitModule(LightningModule):
             weight_decay: Weight decay for optimizer
             max_epochs: Total number of training epochs
             dropout: Dropout rate
+            pos_weight: Weight for positive class in BCEWithLogitsLoss.
+                        Set to num_negative / num_positive to handle class imbalance.
+                        Default 1.0 = no weighting.
         """
         super().__init__()
         
@@ -61,7 +65,13 @@ class ISICLitModule(LightningModule):
         )
         
         # Loss function - BCEWithLogitsLoss combines Sigmoid + BCE
-        self.criterion = nn.BCEWithLogitsLoss()
+        # pos_weight handles class imbalance: each positive sample's loss
+        # is multiplied by this factor. For ISIC 2024 (~0.5% malignant),
+        # pos_weight ≈ 199 makes the model take malignant cases seriously
+        # instead of predicting near-zero probability for everything.
+        self.criterion = nn.BCEWithLogitsLoss(
+            pos_weight=torch.tensor([pos_weight])
+        )
         
         # Metric objects for tracking performance
         self.train_auroc = BinaryAUROC()

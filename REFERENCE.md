@@ -17,6 +17,43 @@ Each model has a corresponding experiment config in `configs/experiment/isic_{mo
 
 ---
 
+## Class Imbalance Handling (pos_weight)
+
+### The Problem
+
+ISIC 2024 has extreme class imbalance: ~99.5% benign, ~0.5% malignant. With plain `BCEWithLogitsLoss()`, the model learns to predict near-zero probability for everything (since that minimizes loss on 99.5% of samples). This causes:
+- Optimal thresholds to be extremely small (~0.00005)
+- Poor sensitivity to malignant cases
+
+### The Fix
+
+`pos_weight` in `BCEWithLogitsLoss` multiplies each positive (malignant) sample's loss contribution by the given factor. This is computed dynamically:
+
+```
+pos_weight = num_negative_samples / num_positive_samples
+```
+
+For ISIC 2024, this is typically ~199. The effect: each malignant sample counts as much as 199 benign ones during training, forcing the model to produce meaningful probability scores for both classes.
+
+### How It Works
+
+1. `ISICDataModule.setup()` computes `pos_weight` from the training split's class distribution
+2. `train.py` reads this value and injects it into the model config via `open_dict`
+3. `ISICLitModule.__init__` passes it to `BCEWithLogitsLoss(pos_weight=...)`
+4. The `pos_weight` value is printed during setup for visibility
+
+The `pos_weight` field in model configs defaults to `1.0` (no weighting) but is always overridden at runtime.
+
+### Expected Effect
+
+| Without pos_weight | With pos_weight |
+|---|---|
+| Threshold: ~0.00005 | Threshold: ~0.3–0.6 |
+| Model predicts near-zero for all | Meaningful probability scores |
+| High specificity, low sensitivity | Balanced sensitivity/specificity |
+
+---
+
 ## Checkpoint Directory Structure
 
 ```
@@ -63,7 +100,7 @@ optimal_threshold = threshold[argmin(distance)]
 ### Where it's stored
 
 - **In the checkpoint**: Stored as a registered buffer `model.best_threshold` — automatically saved/loaded with the checkpoint
-- **In WandB**: Logged as `val/best_threshold` and `val/optimal_threshold` each epoch
+- **In WandB**: Logged as `val/best_threshold` each epoch
 - **During inference**: Automatically used by `predict_step()` and `ensemble_predict.py`
 
 ### What it means
@@ -93,6 +130,38 @@ The default threshold of 0.5 for binary classification is rarely optimal for imb
 3. Navigate to **Charts** → Filter for `roc_curve` to see per-epoch ROC curves
 4. To compare folds: select multiple runs → **Compare** view
 5. The ROC curves show the full TPR vs FPR trade-off with the optimal threshold marked in the title
+6. Chart titles include zero-padded epoch numbers (e.g., `ROC Curve | Epoch 015 | AUROC=...`) for easy sorting
+
+---
+
+## Training Speed Optimizations
+
+### check_val_every_n_epoch
+
+All experiment configs set `check_val_every_n_epoch: 2`, meaning validation only runs on even-numbered epochs. This saves ~50% of wall time since validation involves a full forward pass over the validation set + ROC curve computation.
+
+### FP16 Mixed Precision
+
+All experiment configs and notebook platform overrides use `precision: 16-mixed`. The P100's tensor cores process FP16 ~2× faster than FP32.
+
+### prefetch_factor
+
+Both train and val dataloaders use `prefetch_factor=2` so that each worker pre-loads 2 batches into a queue while the GPU is computing. With `num_workers=4`, 8 batches are always ready in RAM.
+
+### accumulate_grad_batches (large models)
+
+EVA02-Large (`accumulate_grad_batches: 4`, batch=8 → effective batch=32) and Swin-Large (`accumulate_grad_batches: 2`, batch=16 → effective batch=32) accumulate gradients across multiple forward/backward passes before updating weights. This provides better training stability without exceeding GPU memory.
+
+### Approximate training times (P100, 40k images, FP16)
+
+| Model | ~Time/epoch |
+|-------|-------------|
+| EfficientNet-B0 | ~2.5 min |
+| ConvNeXt-Tiny | ~5 min |
+| ConvNeXt-Large | ~10 min |
+| Swin-Large | ~35 min |
+| EfficientNetV2-L | ~15 min |
+| EVA02-Large | ~30 min |
 
 ### Downloading Checkpoints from WandB Artifacts
 
@@ -253,12 +322,12 @@ IMAGE_PATHS = ["/path/to/image.jpg"]
 
 | File | Purpose |
 |------|---------|
-| `src/models/isic_module.py` | Lightning module with TIMM backbone, ROC threshold, WandB curves |
-| `src/data/isic_datamodule.py` | Data loading with HDF5, stratified K-fold, data fraction sampling |
+| `src/models/isic_module.py` | Lightning module with TIMM backbone, pos_weight, ROC threshold, WandB curves |
+| `src/data/isic_datamodule.py` | Data loading with HDF5, stratified K-fold, data fraction, pos_weight computation |
 | `src/ensemble_predict.py` | Multi-model multi-fold ensemble inference CLI |
-| `src/train.py` | Hydra-based training entry point |
-| `configs/model/*.yaml` | Model backbone configurations |
+| `src/train.py` | Hydra-based training entry point, injects pos_weight from data to model |
+| `configs/model/*.yaml` | Model backbone configurations (including pos_weight default) |
 | `configs/experiment/isic_*.yaml` | Complete experiment configurations |
 | `configs/callbacks/default.yaml` | Checkpoint saving, early stopping configs |
-| `configs/logger/wandb.yaml` | WandB logger config (`log_model: "all"`) |
+| `configs/logger/wandb.yaml` | WandB logger config (`log_model: False`) |
 | `notebooks/skin-cancer-detection.ipynb` | Kaggle/Colab/local training notebook |

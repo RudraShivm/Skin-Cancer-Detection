@@ -19,6 +19,7 @@ trainer:
   gradient_clip_val: 1.0
   gradient_clip_algorithm: norm
   precision: 16-mixed
+  check_val_every_n_epoch: 2
 
 model:
   lr: 0.00005

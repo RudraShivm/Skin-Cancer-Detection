@@ -21,6 +21,7 @@ trainer:
   precision: 16-mixed
   # Swin-Large at 224px with batch=16: accumulate 2 steps → effective batch = 32
   accumulate_grad_batches: 2
+  check_val_every_n_epoch: 2
 
 model:
   lr: 0.00005

@@ -180,6 +180,17 @@ class ISICDataModule(L.LightningDataModule):
         train_df = df[df['fold'] != self.hparams.fold].reset_index(drop=True)
         val_df = df[df['fold'] == self.hparams.fold].reset_index(drop=True)
         
+        # Compute class distribution and pos_weight for BCEWithLogitsLoss
+        if 'target' in train_df.columns:
+            n_pos = int(train_df['target'].sum())
+            n_neg = len(train_df) - n_pos
+            self.pos_weight = n_neg / max(n_pos, 1)  # avoid div by zero
+            print(f"  Train: {len(train_df)} samples ({n_pos} positive, {n_neg} negative)")
+            print(f"  Val:   {len(val_df)} samples")
+            print(f"  Class imbalance ratio: 1:{self.pos_weight:.1f} (pos_weight={self.pos_weight:.2f})")
+        else:
+            self.pos_weight = 1.0
+        
         # Create datasets
         if stage == "fit" or stage is None:
             self.data_train = ISICDataset(
