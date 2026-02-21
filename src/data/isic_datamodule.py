@@ -198,7 +198,8 @@ class ISICDataModule(L.LightningDataModule):
         parts = []
 
         # Numeric features
-        num_data = df[TABULAR_NUM_COLS].fillna(0).values.astype(np.float32)
+        # Use reindex to handle missing columns (e.g. tbp_lv_dnn_lesion_confidence in test set)
+        num_data = df.reindex(columns=TABULAR_NUM_COLS, fill_value=0).fillna(0).values.astype(np.float32)
         parts.append(num_data)
 
         # Categorical: sex -> binary (male=1, female=0, unknown=0.5)
