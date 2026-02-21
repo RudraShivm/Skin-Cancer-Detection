@@ -27,8 +27,7 @@ def get_train_transforms(img_size: int = 224):
     """
     return A.Compose([
         A.RandomResizedCrop(
-            height=img_size,
-            width=img_size,
+            size=(img_size, img_size),
             scale=(0.7, 1.0),     # Crop 70-100% of the image
             ratio=(0.75, 1.3333), # Slight aspect ratio variation
         ),
@@ -78,7 +77,7 @@ def get_train_transforms(img_size: int = 224):
 def get_val_transforms(img_size: int = 224):
     """Get validation/test transforms (no augmentation, deterministic)."""
     return A.Compose([
-        A.Resize(img_size, img_size),
+        A.Resize(size=(img_size, img_size)),
         A.Normalize(
             mean=[0.485, 0.456, 0.406],
             std=[0.229, 0.224, 0.225],
