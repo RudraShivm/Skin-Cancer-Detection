@@ -201,20 +201,24 @@ class ISICLitModule(LightningModule):
     
     def on_validation_epoch_end(self) -> None:
         """Lightning hook called at the end of validation epoch."""
-        auroc = self.val_auroc.compute()  # get current val auroc
+        # Compute ROC curve and find optimal threshold
+        fpr, tpr, thresholds = self.val_roc.compute()
+        optimal_threshold = self._compute_optimal_threshold(fpr, tpr, thresholds)
+        self.best_threshold = torch.tensor(optimal_threshold, device=self.device)
+        
+        # Compute AUROC directly from the ROC curve data (trapezoidal rule).
+        # We don't use self.val_auroc.compute() here because Lightning manages
+        # that metric's lifecycle (compute/reset) as part of self.log().
+        # Calling .compute() again may return stale/incorrect values.
+        auroc = torch.trapezoid(tpr, fpr).abs()
         self.val_auroc_best(auroc)  # update best so far val auroc
         
         # Update best_auroc buffer (saved in checkpoint)
         best_auroc_val = self.val_auroc_best.compute()
         self.best_auroc = torch.tensor(best_auroc_val.item(), device=self.device)
         
-        # Compute ROC curve and find optimal threshold
-        fpr, tpr, thresholds = self.val_roc.compute()
-        optimal_threshold = self._compute_optimal_threshold(fpr, tpr, thresholds)
-        self.best_threshold = torch.tensor(optimal_threshold, device=self.device)
-        
         # Log metrics
-        self.log("val/auroc_best", self.val_auroc_best.compute(), sync_dist=True, prog_bar=True)
+        self.log("val/auroc_best", best_auroc_val, sync_dist=True, prog_bar=True)
         self.log("val/best_threshold", optimal_threshold, sync_dist=True, prog_bar=True)
         
         # Log ROC curve to WandB if available
@@ -269,7 +273,11 @@ class ISICLitModule(LightningModule):
         )
         
         # Log ROC curve as a custom line plot
-        auroc_val = self.val_auroc.compute().item()
+        # Compute AUROC directly from the ROC curve data (trapezoidal rule).
+        # We cannot use self.val_auroc.compute() here because Lightning manages
+        # that metric's reset cycle — by this point it may have already been
+        # reset, giving a stale/incorrect value.
+        auroc_val = torch.trapezoid(tpr, fpr).abs().item()
         epoch = self.current_epoch
         wandb.log({
             f"roc_curve/epoch_{epoch:03d}": wandb.plot.line(
