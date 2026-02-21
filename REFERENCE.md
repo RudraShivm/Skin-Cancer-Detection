@@ -2,18 +2,79 @@
 
 ## Model Configurations
 
-| Model | Config File | TIMM Backbone | Default img_size | Default batch_size |
-|-------|-----------|---------------|-----------------|-------------------|
-| EfficientNet-B0 | `configs/model/efficientnet_b0.yaml` | `tf_efficientnet_b0_ns` | 224 | 32 |
+| Model | Config File | TIMM Backbone | img_size | batch_size |
+|-------|-----------|---------------|----------|------------|
+| EfficientNet-B0 | `configs/model/efficientnet_b0.yaml` | `tf_efficientnet_b0_ns` | 384 | 32 |
 | EfficientNetV2-L | `configs/model/efficientnetv2_l.yaml` | `tf_efficientnetv2_l.in21k_ft_in1k` | 384 | 16 |
-| ConvNeXt-Large | `configs/model/convnext_large.yaml` | `convnext_large.fb_in22k_ft_in1k` | 224 | 16 |
-| ConvNeXt-Tiny | `configs/model/convnext_tiny.yaml` | `convnext_tiny` | 224 | 32 |
+| ConvNeXt-Large | `configs/model/convnext_large.yaml` | `convnext_large.fb_in22k_ft_in1k` | 384 | 16 |
+| ConvNeXt-Tiny | `configs/model/convnext_tiny.yaml` | `convnext_tiny` | 384 | 32 |
 | EVA02-Large | `configs/model/eva02_large.yaml` | `eva02_large_patch14_448.mim_in22k_ft_in1k` | 448 | 8 |
-| Swin-Large | `configs/model/swin_large.yaml` | `swin_large_patch4_window7_224.ms_in22k_ft_in1k` | 224 | 16 |
+| Swin-Large | `configs/model/swin_large.yaml` | `swin_large_patch4_window7_224.ms_in22k_ft_in1k` | 384 | 16 |
 
-Each model config specifies a TIMM backbone name, default hyperparameters (lr, weight_decay, dropout), and `num_classes: 1` for binary classification. All backbones are ImageNet-pretrained.
+Each model config specifies a TIMM backbone name, default hyperparameters (lr, weight_decay, dropout), `num_classes: 1` for binary classification, and `n_tabular_features: 0` (overridden at runtime). All backbones are ImageNet-pretrained.
 
 Each model has a corresponding experiment config in `configs/experiment/isic_{model_name}.yaml` which sets the complete training configuration including data, callbacks, logger, and trainer settings.
+
+---
+
+## Image + Tabular Fusion Architecture
+
+### Why tabular features matter
+
+ISIC 2024 provides 3D-TBP metadata alongside images: patient age, anatomical site, lesion color/geometry measurements, symmetry scores, and DNN confidence values. The Yakiniku 2nd place solution showed that combining image features with this tabular data significantly improves detection — dermatologists also use clinical context (patient age, lesion location) when diagnosing.
+
+### Architecture
+
+```
+Image (384×384) → TIMM Backbone (num_classes=0) → image_features (e.g. 1280-dim)
+                                                         ↓
+Tabular (42-dim) ─────────────────────────────── → [concat] → Fusion MLP → 1 logit
+```
+
+**Fusion MLP**: `Linear(img_dim + 42, 128) → BatchNorm → ReLU → Dropout → Linear(128, 1)`
+
+### Tabular features (42 dimensions)
+
+| Category | Features | Count |
+|----------|----------|-------|
+| Numeric | age, lesion size, LAB/LCH color channels (A/B/C/H/L × lesion/surround), color deltas, area, perimeter, eccentricity, symmetry, 3D position, DNN confidence | 33 |
+| Categorical | sex (1 binary) | 1 |
+| Categorical | anatom_site_general (7 one-hot) | 7 |
+| **Total** | | **41** |
+
+### How it works
+
+1. `ISICDataModule.setup()` encodes tabular features from the metadata CSV
+2. Numeric features are standardized (zero mean, unit variance) using **training set statistics only**
+3. `train.py` reads `datamodule.n_tabular_features` and injects it into the model config
+4. `ISICLitModule.__init__` creates a TIMM backbone with `num_classes=0` (strips classifier head) and builds a fusion MLP
+5. `forward(images, tabular)` extracts image features, concatenates with tabular, and passes through the fusion MLP
+
+### Backward compatibility
+
+When `n_tabular_features=0` (default in model configs), the model falls back to image-only mode with TIMM's built-in classifier head. Old checkpoints load normally.
+
+---
+
+## Advanced 3D-TBP Augmentations
+
+ISIC 2024 images are crops from 3D Total Body Photography. They often contain black borders, hair artifacts, and varying illumination. The training augmentations are designed to handle these domain-specific characteristics:
+
+| Augmentation | Why |
+|---|---|
+| `RandomResizedCrop(scale=0.7-1.0)` | Handles black borders by zooming in; forces model to learn from different lesion regions |
+| `Transpose + Flip + Rotate90` | Full geometric invariance — lesion orientation doesn't matter for pathology |
+| `ShiftScaleRotate(rotate=30°, border=black)` | Broader rotation with black border fill matching 3D-TBP edges |
+| `HueSaturationValue` | Handles color variation across different 3D-TBP devices |
+| `RandomBrightnessContrast` | Handles illumination differences |
+| `CoarseDropout(max_holes=8, fill=black)` | Simulates hair and artifact occlusion (like AdvancedHairAug in winning solutions) |
+| `GaussNoise / GaussianBlur / MotionBlur` | Robustness to image quality variations |
+
+---
+
+## Higher Resolution Training (384px)
+
+All experiment configs now use 384×384 images (except EVA02-Large at 448). Higher resolution is critical for dermatology — small visual details (asymmetry, border irregularity, color variation) that distinguish malignant from benign lesions are better captured at 384px than 224px. The Yakiniku 2nd place solution also trained at 384×384.
 
 ---
 
@@ -322,12 +383,14 @@ IMAGE_PATHS = ["/path/to/image.jpg"]
 
 | File | Purpose |
 |------|---------|
-| `src/models/isic_module.py` | Lightning module with TIMM backbone, pos_weight, ROC threshold, WandB curves |
-| `src/data/isic_datamodule.py` | Data loading with HDF5, stratified K-fold, data fraction, pos_weight computation |
+| `src/models/isic_module.py` | Lightning module with TIMM backbone, image+tabular fusion MLP, pos_weight, ROC threshold, WandB curves |
+| `src/data/isic_datamodule.py` | Data loading with HDF5, tabular feature extraction/standardization, stratified K-fold, pos_weight computation |
+| `src/data/components/transforms.py` | 3D-TBP domain-specific augmentations (RandomResizedCrop, CoarseDropout, etc.) |
 | `src/ensemble_predict.py` | Multi-model multi-fold ensemble inference CLI |
-| `src/train.py` | Hydra-based training entry point, injects pos_weight from data to model |
-| `configs/model/*.yaml` | Model backbone configurations (including pos_weight default) |
-| `configs/experiment/isic_*.yaml` | Complete experiment configurations |
+| `src/train.py` | Hydra-based training entry point, injects pos_weight and n_tabular_features from data to model |
+| `configs/model/*.yaml` | Model backbone configs (pos_weight, n_tabular_features defaults) |
+| `configs/experiment/isic_*.yaml` | Complete experiment configurations (384px default) |
 | `configs/callbacks/default.yaml` | Checkpoint saving, early stopping configs |
 | `configs/logger/wandb.yaml` | WandB logger config (`log_model: False`) |
 | `notebooks/skin-cancer-detection.ipynb` | Kaggle/Colab/local training notebook |
+| `notebooks/submission.ipynb` | Kaggle inference-only submission notebook |

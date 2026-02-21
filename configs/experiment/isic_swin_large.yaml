@@ -14,8 +14,8 @@ experiment_name: ${model.name}_fold${data.fold}
 seed: 42
 
 trainer:
-  min_epochs: 10
-  max_epochs: 20
+  min_epochs: 5
+  max_epochs: 10
   gradient_clip_val: 1.0
   gradient_clip_algorithm: norm
   precision: 16-mixed
@@ -32,7 +32,7 @@ data:
   batch_size: 16
   num_workers: 4
   fold: 0
-  img_size: 224
+  img_size: 256
   data_fraction: 1
 
 callbacks:
@@ -45,5 +45,5 @@ callbacks:
 
   early_stopping:
     monitor: "val/auroc"
-    patience: 5
+    patience: 3
     mode: "max"

@@ -9,3 +9,4 @@ weight_decay: 0.05
 max_epochs: ${trainer.max_epochs}
 dropout: 0.3
 pos_weight: 1.0  # overridden at runtime from training data class ratio
+n_tabular_features: 0  # overridden at runtime from datamodule

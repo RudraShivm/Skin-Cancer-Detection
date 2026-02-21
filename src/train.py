@@ -59,13 +59,16 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     OmegaConf.resolve(cfg)
     datamodule: LightningDataModule = hydra.utils.instantiate(cfg.data)
 
-    # Run datamodule setup to compute pos_weight from training set class distribution.
-    # This must happen before model instantiation so the model gets the correct weight.
+    # Run datamodule setup to compute pos_weight and n_tabular_features.
+    # This must happen before model instantiation so the model gets the correct values.
     datamodule.setup(stage="fit")
-    if hasattr(datamodule, "pos_weight"):
-        log.info(f"Setting model.pos_weight = {datamodule.pos_weight:.2f} (from training data)")
-        with open_dict(cfg):
+    with open_dict(cfg):
+        if hasattr(datamodule, "pos_weight"):
+            log.info(f"Setting model.pos_weight = {datamodule.pos_weight:.2f} (from training data)")
             cfg.model.pos_weight = datamodule.pos_weight
+        if hasattr(datamodule, "n_tabular_features") and datamodule.n_tabular_features > 0:
+            log.info(f"Setting model.n_tabular_features = {datamodule.n_tabular_features}")
+            cfg.model.n_tabular_features = datamodule.n_tabular_features
 
     log.info(f"Instantiating model <{cfg.model._target_}>")
     model: LightningModule = hydra.utils.instantiate(cfg.model)
