@@ -4,12 +4,12 @@
 
 | Model | Config File | TIMM Backbone | img_size | batch_size |
 |-------|-----------|---------------|----------|------------|
-| EfficientNet-B0 | `configs/model/efficientnet_b0.yaml` | `tf_efficientnet_b0_ns` | 384 | 32 |
-| EfficientNetV2-L | `configs/model/efficientnetv2_l.yaml` | `tf_efficientnetv2_l.in21k_ft_in1k` | 384 | 16 |
-| ConvNeXt-Large | `configs/model/convnext_large.yaml` | `convnext_large.fb_in22k_ft_in1k` | 384 | 16 |
-| ConvNeXt-Tiny | `configs/model/convnext_tiny.yaml` | `convnext_tiny` | 384 | 32 |
-| EVA02-Large | `configs/model/eva02_large.yaml` | `eva02_large_patch14_448.mim_in22k_ft_in1k` | 448 | 8 |
-| Swin-Large | `configs/model/swin_large.yaml` | `swin_large_patch4_window7_224.ms_in22k_ft_in1k` | 384 | 16 |
+| EfficientNet-B0 | `configs/model/efficientnet_b0.yaml` | `tf_efficientnet_b0_ns` | 256 | 32 |
+| EfficientNetV2-L | `configs/model/efficientnetv2_l.yaml` | `tf_efficientnetv2_l.in21k_ft_in1k` | 256 | 16 |
+| ConvNeXt-Large | `configs/model/convnext_large.yaml` | `convnext_large.fb_in22k_ft_in1k` | 256 | 16 |
+| ConvNeXt-Tiny | `configs/model/convnext_tiny.yaml` | `convnext_tiny` | 256 | 32 |
+| EVA02-Large | `configs/model/eva02_large.yaml` | `eva02_large_patch14_448.mim_m38m_ft_in22k_in1k` | 256 | 8 |
+| Swin-Large | `configs/model/swin_large.yaml` | `swin_large_patch4_window7_224.ms_in22k_ft_in1k` | 256 | 16 |
 
 Each model config specifies a TIMM backbone name, default hyperparameters (lr, weight_decay, dropout), `num_classes: 1` for binary classification, and `n_tabular_features: 0` (overridden at runtime). All backbones are ImageNet-pretrained.
 
@@ -26,7 +26,7 @@ ISIC 2024 provides 3D-TBP metadata alongside images: patient age, anatomical sit
 ### Architecture
 
 ```
-Image (384×384) → TIMM Backbone (num_classes=0) → image_features (e.g. 1280-dim)
+Image (256×256) → TIMM Backbone (num_classes=0) → image_features (e.g. 1280-dim)
                                                          ↓
 Tabular (42-dim) ─────────────────────────────── → [concat] → Fusion MLP → 1 logit
 ```
@@ -72,9 +72,9 @@ ISIC 2024 images are crops from 3D Total Body Photography. They often contain bl
 
 ---
 
-## Higher Resolution Training (384px)
+## Higher Resolution Training (256px)
 
-All experiment configs now use 384×384 images (except EVA02-Large at 448). Higher resolution is critical for dermatology — small visual details (asymmetry, border irregularity, color variation) that distinguish malignant from benign lesions are better captured at 384px than 224px. The Yakiniku 2nd place solution also trained at 384×384.
+All experiment configs now use 256×256 images. Higher resolution is critical for dermatology — small visual details (asymmetry, border irregularity, color variation) that distinguish malignant from benign lesions are better captured at 256px than 224px, while keeping training times manageable compared to 384px or 448px.
 
 ---
 
@@ -389,7 +389,7 @@ IMAGE_PATHS = ["/path/to/image.jpg"]
 | `src/ensemble_predict.py` | Multi-model multi-fold ensemble inference CLI |
 | `src/train.py` | Hydra-based training entry point, injects pos_weight and n_tabular_features from data to model |
 | `configs/model/*.yaml` | Model backbone configs (pos_weight, n_tabular_features defaults) |
-| `configs/experiment/isic_*.yaml` | Complete experiment configurations (384px default) |
+| `configs/experiment/isic_*.yaml` | Complete experiment configurations (256px default) |
 | `configs/callbacks/default.yaml` | Checkpoint saving, early stopping configs |
 | `configs/logger/wandb.yaml` | WandB logger config (`log_model: False`) |
 | `notebooks/skin-cancer-detection.ipynb` | Kaggle/Colab/local training notebook |

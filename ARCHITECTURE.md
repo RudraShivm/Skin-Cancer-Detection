@@ -65,7 +65,7 @@ Our model does the same — it looks at both the **image** and these **clinical 
 ```mermaid
 flowchart LR
     subgraph Image_Path["Image Path"]
-        IMG["Skin Lesion Photo<br/>384×384 pixels"]
+        IMG["Skin Lesion Photo<br/>256×256 pixels"]
         AUG["Augmentations<br/>(crop, flip, color jitter,<br/>dropout)"]
         BACKBONE["TIMM Backbone<br/>(e.g. EfficientNet-B0)<br/>ImageNet pretrained"]
         FEAT["Image Features<br/>(1280-dim vector)"]
@@ -93,7 +93,7 @@ flowchart LR
 
 ### Step-by-Step Explanation
 
-1. **Image Path**: The skin lesion photo (384×384) goes through a pre-trained backbone network (like EfficientNet). This backbone was originally trained on ImageNet (millions of everyday objects) and has learned to extract visual features (edges, textures, colors). We strip off its final classification layer and use the **feature vector** it produces (e.g., 1280 numbers that represent the image).
+1. **Image Path**: The skin lesion photo (256×256) goes through a pre-trained backbone network (like EfficientNet). This backbone was originally trained on ImageNet (millions of everyday objects) and has learned to extract visual features (edges, textures, colors). We strip off its final classification layer and use the **feature vector** it produces (e.g., 1280 numbers that represent the image).
 
 2. **Tabular Path**: 42 clinical measurements are extracted from the metadata CSV. These are standardized so each feature has mean=0 and std=1 (otherwise features with large values like `tbp_lv_y=1500` would dominate over features like `eccentricity=0.9`).
 

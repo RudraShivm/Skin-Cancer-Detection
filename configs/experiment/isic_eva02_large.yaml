@@ -19,8 +19,8 @@ trainer:
   gradient_clip_val: 1.0
   gradient_clip_algorithm: norm
   precision: 16-mixed
-  # EVA02 at 448px needs small batch — accumulate 4 steps → effective batch = 32
-  accumulate_grad_batches: 4
+  # EVA02 at 256px needs small batch — accumulate 8 steps → effective batch = 32
+  accumulate_grad_batches: 8
   check_val_every_n_epoch: 2
 
 model:
@@ -29,10 +29,10 @@ model:
   dropout: 0.3
 
 data:
-  batch_size: 8
+  batch_size: 4
   num_workers: 4
   fold: 0
-  img_size: 448
+  img_size: 256
   data_fraction: 1
 
 callbacks:

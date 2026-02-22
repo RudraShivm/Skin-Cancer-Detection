@@ -44,7 +44,7 @@ from albumentations.pytorch import ToTensorV2
 #  INLINE DEFINITIONS (self-contained — no repo imports needed)
 # ===================================================================
 
-def get_val_transforms(img_size: int = 384):
+def get_val_transforms(img_size: int = 256):
     return A.Compose([
         A.Resize(height=img_size, width=img_size),
         A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -168,7 +168,7 @@ def get_model_img_size(model):
         data_config = timm.data.resolve_data_config(model.model.pretrained_cfg)
         return data_config.get("input_size", (3, 224, 224))[-1]
     except Exception:
-        return 384
+        return 256
 
 
 # ===================================================================
@@ -358,7 +358,7 @@ def build_app(checkpoint_dir: str, device: torch.device) -> gr.Blocks:
                 image_input = gr.Image(
                     label="Skin Lesion Image",
                     type="numpy",
-                    height=384,
+                    height=256,
                 )
 
                 checkpoint_input = gr.Dropdown(

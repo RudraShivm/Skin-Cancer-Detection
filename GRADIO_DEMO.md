@@ -54,7 +54,7 @@ flowchart LR
 
     subgraph Backend["Python Backend (src/gradio_app.py)"]
         LOAD["Load checkpoint(s)"]
-        PREPROCESS["Preprocess image<br/>(Resize 384×384 + Normalize)"]
+        PREPROCESS["Preprocess image<br/>(Resize 256×256 + Normalize)"]
         ENCODE["Encode tabular features<br/>(42-dim vector)"]
         FORWARD["Model forward pass<br/>(image + tabular → logit)"]
         ENSEMBLE["Average probabilities<br/>(if multiple checkpoints)"]
