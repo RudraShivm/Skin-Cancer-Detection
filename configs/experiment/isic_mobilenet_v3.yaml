@@ -2,12 +2,12 @@
 
 defaults:
   - override /data: isic2024
-  - override /model: convnext_tiny
+  - override /model: mobilenet_v3
   - override /callbacks: default
   - override /logger: wandb
   - override /trainer: default
 
-tags: ["isic2024", "convnext_tiny"]
+tags: ["isic2024", "mobilenet_v3"]
 
 experiment_name: ${model.name}_fold${data.fold}
 
@@ -19,17 +19,16 @@ trainer:
   gradient_clip_val: 1.0
   gradient_clip_algorithm: norm
   precision: 16-mixed
-  # Reduce batch size to speed up each step, accumulate for equivalent effective batch
-  accumulate_grad_batches: 4
   check_val_every_n_epoch: 2
 
 model:
   lr: 0.0001
   weight_decay: 0.01
-  dropout: 0.3
+  dropout: 0.2
 
 data:
-  batch_size: 8
+  # MobileNetV3 is very lightweight — can use large batch for fast training
+  batch_size: 64
   num_workers: 4
   fold: 0
   img_size: 256

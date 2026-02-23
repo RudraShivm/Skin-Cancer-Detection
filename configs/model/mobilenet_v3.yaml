@@ -1,0 +1,12 @@
+_target_: src.models.isic_module.ISICLitModule
+
+name: mobilenet_v3
+backbone: mobilenetv3_large_100.ra_in1k
+num_classes: 1
+pretrained: true
+lr: 0.0001
+weight_decay: 0.01
+max_epochs: ${trainer.max_epochs}
+dropout: 0.2
+pos_weight: 1.0  # overridden at runtime from training data class ratio
+n_tabular_features: 0  # overridden at runtime from datamodule
