@@ -73,8 +73,13 @@ class ISICLitModule(LightningModule):
                 num_classes=0,       # Strip the classifier head
                 drop_rate=dropout,
             )
-            # Get the backbone's feature dimension
-            img_feat_dim = self.model.num_features
+            # Detect the actual feature dimension with a dummy forward pass.
+            # model.num_features can be unreliable for some architectures (e.g.
+            # MobileNetV3 has an extra conv_head layer that adds a second projection),
+            # so a dummy pass gives us the true output size.
+            with torch.no_grad():
+                _dummy = torch.zeros(1, 3, 224, 224)
+                img_feat_dim = self.model(_dummy).shape[1]
 
             # Fusion MLP: concatenated [image_features, tabular_features] → 1 logit
             fusion_dim = img_feat_dim + n_tabular_features
