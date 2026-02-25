@@ -11,3 +11,6 @@ output_dir: ${paths.work_dir}/logs
 ckpt_dir: ${paths.output_dir}/checkpoints
 
 log_dir: ${paths.work_dir}/logs
+
+# Hugging Face Hub repository for model checkpoints
+hf_repo_id: "RudraShivm/skin-cancer-detection-isic2024"
