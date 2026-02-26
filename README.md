@@ -218,22 +218,6 @@ Skin-Cancer-Detection/
 
 ---
 
-## 🔮 Future Improvements
-
-Based on analysis of the [1st place](https://www.kaggle.com/competitions/isic-2024-challenge/writeups/ilya-novoselskiy-1st-place-solution) and [2nd place](https://www.kaggle.com/competitions/isic-2024-challenge/writeups/yakiniku-2nd-place-solution) solutions:
-
-| Technique | Impact | From |
-|-----------|--------|------|
-| **GBDT stacking** (LightGBM/XGBoost/CatBoost on top of CNN predictions) | 🔥 High | Both |
-| **Patient-relative features** (lesion vs patient's average) | 🔥 High | 1st place |
-| **"Ugly duckling" detection** (outlier lesions per patient) | 🔥 High | 2nd place |
-| **TIP multimodal pre-training** (tabular-image pre-training) | 🟡 Medium | 2nd place |
-| **External ISIC data** (with domain adaptation) | 🟡 Medium | 1st place |
-
-> 📖 **Full analysis**: [docs/future-improvements.md](docs/future-improvements.md)
-
----
-
 ## 🙏 Acknowledgments
 
 - **[ISIC 2024 Challenge](https://www.kaggle.com/competitions/isic-2024-challenge)** — competition dataset and problem formulation
