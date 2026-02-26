@@ -53,6 +53,7 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     # set seed for random number generators in pytorch, numpy and python.random
 
     if cfg.get("seed"):
+        log.info(f"Setting seed to {cfg.seed}")
         L.seed_everything(cfg.seed, workers=True)
 
     log.info(f"Instantiating datamodule <{cfg.data._target_}>")

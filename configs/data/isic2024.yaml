@@ -18,3 +18,4 @@ n_folds: 5
 
 # Image settings
 img_size: 224
+

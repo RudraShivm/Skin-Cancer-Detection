@@ -111,8 +111,14 @@ flowchart LR
 
 ## Tabular Features
 
-The metadata CSV contains clinical measurements taken by the 3D-TBP system:
+The metadata CSV contains clinical measurements taken by the 3D-TBP system.
 
+### Standardization (Patient-Wise)
+
+Before being fed to the model, tabular features are standardized (zero mean, unit variance).
+This project uses **Patient-Wise Standardization** for all models. Instead of using global dataset statistics, it computes the mean and standard deviation for *each patient individually*. This implements the "ugly duckling" concept — highlighting how much a lesion deviates from the patient's own normal skin, rather than the global population.
+
+**Fallback Mechanism**: If a patient only has one lesion (which occurs in single-image inference in the **Gradio app**, or for patients with only one image in the dataset), the standardization automatically falls back to Global Training Statistics. However, the logic is unified and ready to handle multi-image batches in Gradio.
 ### Patient Demographics
 
 | Feature | What it is |

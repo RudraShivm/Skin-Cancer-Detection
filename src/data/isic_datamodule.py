@@ -277,13 +277,24 @@ class ISICDataModule(L.LightningDataModule):
         train_tabular = self._encode_tabular(train_df)
         val_tabular = self._encode_tabular(val_df)
 
-        # Standardize using training set statistics (zero mean, unit variance)
+        # Patient-wise standardization: normalize features within each
+        # patient's lesion set. This implements the "ugly duckling"
+        # normalization — a lesion's features become relative to that
+        # patient's "normal" baseline rather than the global population.
+        # Patients with only one lesion fall back to global stats.
+        print("  Using PATIENT-WISE feature standardization")
+
+        # Global stats as fallback for single-lesion patients
         self._tab_mean = train_tabular.mean(axis=0)
         self._tab_std = train_tabular.std(axis=0)
-        self._tab_std[self._tab_std < 1e-7] = 1.0  # Avoid division by zero
+        self._tab_std[self._tab_std < 1e-7] = 1.0
 
-        train_tabular = (train_tabular - self._tab_mean) / self._tab_std
-        val_tabular = (val_tabular - self._tab_mean) / self._tab_std
+        train_tabular = self._patient_standardize(
+            train_tabular, train_df['patient_id'].values
+        )
+        val_tabular = self._patient_standardize(
+            val_tabular, val_df['patient_id'].values
+        )
 
         self.n_tabular_features = train_tabular.shape[1]
         print(f"  Tabular features: {self.n_tabular_features} dims "
@@ -306,6 +317,41 @@ class ISICDataModule(L.LightningDataModule):
                 tabular_features=val_tabular,
                 transform=get_val_transforms(self.hparams.img_size),
             )
+
+    def _patient_standardize(
+        self, tabular: np.ndarray, patient_ids: np.ndarray
+    ) -> np.ndarray:
+        """Standardize tabular features per-patient.
+
+        For each patient, computes mean/std across that patient's lesions and
+        normalizes accordingly. Patients with only one lesion fall back to
+        global statistics (self._tab_mean, self._tab_std) since per-patient
+        std would be zero.
+
+        Args:
+            tabular: Array [N, n_features] of encoded tabular features.
+            patient_ids: Array [N] of patient IDs for each row.
+
+        Returns:
+            Standardized array of same shape.
+        """
+        result = np.zeros_like(tabular)
+        unique_patients = np.unique(patient_ids)
+
+        for pid in unique_patients:
+            mask = patient_ids == pid
+            patient_data = tabular[mask]
+
+            if len(patient_data) <= 1:
+                # Single lesion: fall back to global standardization
+                result[mask] = (patient_data - self._tab_mean) / self._tab_std
+            else:
+                p_mean = patient_data.mean(axis=0)
+                p_std = patient_data.std(axis=0)
+                p_std[p_std < 1e-7] = 1.0  # Avoid division by zero
+                result[mask] = (patient_data - p_mean) / p_std
+
+        return result
 
     def train_dataloader(self) -> TRAIN_DATALOADERS:
         """Create and return train dataloader."""
@@ -330,6 +376,10 @@ class ISICDataModule(L.LightningDataModule):
             prefetch_factor=2 if self.hparams.num_workers > 0 else None,
             shuffle=False,
         )
+
+    def test_dataloader(self) -> EVAL_DATALOADERS:
+        """Create and return test dataloader."""
+        return self.val_dataloader()
 
 
 if __name__ == "__main__":

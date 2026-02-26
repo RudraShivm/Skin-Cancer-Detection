@@ -2,12 +2,12 @@
 
 defaults:
   - override /data: isic2024
-  - override /model: eva02_large
+  - override /model: eva02_small
   - override /callbacks: default
   - override /logger: wandb
   - override /trainer: default
 
-tags: ["isic2024", "eva02_large"]
+tags: ["isic2024", "eva02_small"]
 
 experiment_name: ${model.name}_fold${data.fold}
 
@@ -19,8 +19,8 @@ trainer:
   gradient_clip_val: 1.0
   gradient_clip_algorithm: norm
   precision: 16-mixed
-  # EVA02 at 448px needs small batch — accumulate 8 steps → effective batch = 32
-  accumulate_grad_batches: 8
+  # EVA02-small at 336px: batch=8 × accum=4 → effective batch = 32
+  accumulate_grad_batches: 4
   check_val_every_n_epoch: 2
 
 model:
@@ -29,10 +29,10 @@ model:
   dropout: 0.3
 
 data:
-  batch_size: 4
+  batch_size: 8
   num_workers: 4
   fold: 0
-  img_size: 448
+  img_size: 336
   data_fraction: 1
 
 callbacks:

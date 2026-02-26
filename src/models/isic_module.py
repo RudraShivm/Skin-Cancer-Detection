@@ -77,8 +77,12 @@ class ISICLitModule(LightningModule):
             # model.num_features can be unreliable for some architectures (e.g.
             # MobileNetV3 has an extra conv_head layer that adds a second projection),
             # so a dummy pass gives us the true output size.
+            # Detect the actual feature dimension with a dummy forward pass.
             with torch.no_grad():
-                _dummy = torch.zeros(1, 3, 224, 224)
+                # Use 336x336 as dummy size to support EVA02 Small and other
+                # models that might have strict input size requirements.
+                # Most models are flexible or expect 224/pristine 336/448.
+                _dummy = torch.zeros(1, 3, 336, 336)
                 img_feat_dim = self.model(_dummy).shape[1]
 
             # Fusion MLP: concatenated [image_features, tabular_features] → 1 logit
