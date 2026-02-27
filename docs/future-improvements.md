@@ -140,8 +140,8 @@ Ranked by **expected impact** and **implementation effort**:
 
 | # | Improvement | Estimated Impact | Effort | Source |
 |---|------------|-----------------|--------|---------|
-| 1 | **Add GBDT stacking** — use CNN probabilities as features in LightGBM/CatBoost | Very High | Medium | Both |
-| 2 | **Patient-relative features** — compute lesion prediction relative to patient average | Very High | Low | 1st |
+| 1 | ✅ **~~Add GBDT stacking~~** — Implemented in `src/gbdt/` | Very High | Medium | Both |
+| 2 | ✅ **~~Patient-relative features~~** — Implemented in `src/gbdt/train_gbdt.py` | Very High | Low | 1st |
 | 3 | **Multi-seed CV validation** — run with 10 seeds, use t-test for significance | High | Low | 1st |
 | 4 | **"Ugly duckling" scoring** — LOF or distance-based anomaly detection per patient | High | Medium | Both |
 
@@ -152,7 +152,7 @@ Ranked by **expected impact** and **implementation effort**:
 | 5 | **Patient-wise feature standardization** | Medium | Low | 2nd |
 | 6 | **Multi-model diversity** — train with different setups (Mixup, multimodal loss) | Medium | Medium | 2nd |
 | 7 | **Triple stratification CV** | Medium | Low | 2nd |
-| 8 | **Noise injection in stacking** — add Gaussian noise to image features during GBDT training | Medium | Low | 1st |
+| 8 | ✅ **~~Noise injection in stacking~~** — Implemented in `src/gbdt/train_gbdt.py` (default σ=0.1) | Medium | Low | 1st |
 
 ### 🟢 Lower Priority — Polish
 
@@ -170,9 +170,9 @@ Ranked by **expected impact** and **implementation effort**:
 > [!TIP]
 > **Start here** — these changes require minimal code but can significantly improve scores:
 
-1. **Patient-relative predictions (Item #2)**: After getting per-lesion predictions, divide by patient mean. This is a post-processing step that doesn't require retraining.
+1. **Patient-relative predictions (Item #2)**: ✅ **Implemented** — `src/gbdt/train_gbdt.py` computes ratio, diff, and z-score features per patient.
 
-2. **GBDT stacking (Item #1)**: Train a single CatBoost model on top of your current CNN predictions + raw tabular features. Even a basic version often outperforms the CNN alone.
+2. **GBDT stacking (Item #1)**: ✅ **Implemented** — Full pipeline in `src/gbdt/` with LightGBM, XGBoost, and CatBoost. Training notebook and submission notebook both support GBDT stacking.
 
 3. **Multi-seed validation (Item #3)**: Instead of training once, train 3-5 times with different seeds and average predictions. This reduces variance and gives more reliable CV scores.
 

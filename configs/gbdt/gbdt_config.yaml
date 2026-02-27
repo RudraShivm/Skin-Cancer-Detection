@@ -1,0 +1,60 @@
+# GBDT Training Configuration
+# Use with: python src/gbdt/train_gbdt.py --config configs/gbdt/gbdt_config.yaml
+
+# Feature extraction settings
+feature_extraction:
+  checkpoint_dir: checkpoints     # CNN checkpoint root directory
+  data_dir: data/isic-2024-challenge
+  output_dir: outputs/gbdt_features
+  batch_size: 32
+  num_workers: 4
+  n_folds: 5
+
+# GBDT training settings
+training:
+  features_dir: outputs/gbdt_features
+  output_dir: checkpoints/gbdt
+
+  # GBDT types to train (any combination of: lightgbm, xgboost, catboost)
+  gbdt_types:
+    - lightgbm
+    - xgboost
+    - catboost
+
+  # Random seeds for variance reduction (3 seeds × 3 types × 5 folds = 45 models)
+  seeds: [2105152, 2105163, 2105170]
+
+  # Noise injection sigma — adds Gaussian noise to CNN predictions
+  # during GBDT training to prevent over-reliance on image model outputs.
+  # From the 1st place solution.
+  noise_sigma: 0.1
+
+  # LightGBM hyperparameters
+  lightgbm:
+    learning_rate: 0.05
+    max_depth: 6
+    num_leaves: 63
+    min_child_samples: 20
+    subsample: 0.8
+    colsample_bytree: 0.8
+    reg_alpha: 0.1
+    reg_lambda: 1.0
+    n_estimators: 1000
+
+  # XGBoost hyperparameters
+  xgboost:
+    learning_rate: 0.05
+    max_depth: 6
+    subsample: 0.8
+    colsample_bytree: 0.8
+    reg_alpha: 0.1
+    reg_lambda: 1.0
+    n_estimators: 1000
+
+  # CatBoost hyperparameters
+  catboost:
+    learning_rate: 0.05
+    depth: 6
+    l2_leaf_reg: 3.0
+    subsample: 0.8
+    iterations: 1000

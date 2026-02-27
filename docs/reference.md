@@ -214,6 +214,61 @@ optimal_threshold = threshold[argmin(distance)]
 
 ---
 
+## GBDT Stacking
+
+### Overview
+
+GBDT models (LightGBM, XGBoost, CatBoost) are trained as a second stage on top of CNN predictions. The pipeline is:
+
+1. **Extract CNN features** — `extract_cnn_features.py` runs each CNN checkpoint on the training data
+2. **Train GBDT models** — `train_gbdt.py` trains gradient-boosted trees on CNN probs + tabular + patient-relative features
+
+### Checkpoint Structure
+
+```
+checkpoints/gbdt/
+├── lightgbm_fold0_seed42.pkl
+├── lightgbm_fold0_seed42_info.json
+├── xgboost_fold0_seed42.pkl
+├── xgboost_fold0_seed42_info.json
+├── catboost_fold0_seed42.pkl
+├── catboost_fold0_seed42_info.json
+└── ...  (3 types × 5 folds × 3 seeds = 45 models)
+```
+
+Each `_info.json` contains: `type`, `fold`, `seed`, `threshold`, `val_auroc`, `n_features`, `feature_names`, `model_name`.
+
+### CLI Usage
+
+```bash
+# Step 1: Extract CNN predictions
+python src/gbdt/extract_cnn_features.py \
+    --checkpoint-dir checkpoints/ \
+    --data-dir data/isic-2024-challenge \
+    --output-dir outputs/gbdt_features \
+    --n-folds 5
+
+# Step 2: Train GBDT models
+python src/gbdt/train_gbdt.py \
+    --features-dir outputs/gbdt_features \
+    --output-dir checkpoints/gbdt \
+    --gbdt-types lightgbm xgboost catboost \
+    --seeds 42 123 456 \
+    --noise-sigma 0.1
+```
+
+### Feature Engineering
+
+| Feature Group | Count | Description |
+|---------------|-------|-------------|
+| Tabular (standardized) | 43 | Same features used by CNN fusion head |
+| CNN probabilities | 1 per model | Sigmoid output from each trained CNN |
+| Patient-relative | 3 per CNN | Ratio to mean, diff from mean, z-score within patient |
+
+**Noise injection**: During training, Gaussian noise (σ=0.1) is added to CNN probabilities to prevent GBDT from over-relying on CNN predictions.
+
+---
+
 ## Ensemble Prediction
 
 ### CLI Usage
@@ -308,15 +363,18 @@ ENSEMBLE_MODELS = ["efficientnet_b0", "mobilenet_v3"]
 ## Key Files
 
 | File | Purpose |
-|------|---------| 
+|------|---------|
 | `src/models/isic_module.py` | Lightning module: TIMM backbone, fusion MLP, pos_weight, ROC threshold, WandB curves |
 | `src/data/isic_datamodule.py` | Data loading: HDF5, tabular features, standardization, stratified K-fold, pos_weight |
 | `src/data/components/transforms.py` | 3D-TBP domain-specific augmentations |
 | `src/ensemble_predict.py` | Multi-model multi-fold ensemble inference CLI |
+| `src/gbdt/extract_cnn_features.py` | Extract CNN predictions for GBDT stacking (Stage 2 input) |
+| `src/gbdt/train_gbdt.py` | Train LightGBM/XGBoost/CatBoost GBDT models (Stage 2) |
+| `src/gbdt/predict_gbdt.py` | GBDT ensemble loading and prediction |
 | `src/gradio_app.py` | Gradio web demo for interactive predictions |
 | `src/train.py` | Hydra-based training entry point |
 | `scripts/download_checkpoints.py` | Download pretrained models from HF Hub |
 | `configs/model/*.yaml` | Model backbone configs |
 | `configs/experiment/isic_*.yaml` | Complete experiment configurations |
-| `notebooks/skin-cancer-detection.ipynb` | Kaggle/Colab training notebook |
-| `notebooks/submission.ipynb` | Kaggle inference-only submission notebook |
+| `notebooks/skin-cancer-detection.ipynb` | Kaggle/Colab training notebook (CNN + GBDT) |
+| `notebooks/submission.ipynb` | Kaggle inference-only submission notebook (with GBDT stacking) |

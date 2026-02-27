@@ -21,21 +21,28 @@ flowchart TD
         META["📊 train-metadata.csv<br/>(patient info, color,<br/>geometry, 55 columns)"]
     end
 
-    subgraph Training["⚡ Training Pipeline (train.py)"]
+    subgraph Stage1["⚡ Stage 1: CNN Training"]
         DM["ISICDataModule<br/>- Loads images + tabular<br/>- K-fold split<br/>- Augmentations<br/>- Standardization"]
         MODEL["ISICLitModule<br/>- TIMM backbone<br/>- Fusion MLP<br/>- BCEWithLogitsLoss"]
         TRAINER["Lightning Trainer<br/>- Mixed precision FP16<br/>- CosineAnnealing LR<br/>- Early stopping<br/>- WandB logging"]
     end
 
+    subgraph Stage2["🌲 Stage 2: GBDT Stacking"]
+        EXTRACT["Extract CNN Predictions<br/>extract_cnn_features.py"]
+        GBDT["Train GBDTs<br/>train_gbdt.py<br/>LightGBM / XGBoost / CatBoost"]
+    end
+
     subgraph Output["💾 Output"]
-        CKPT["Checkpoints<br/>(.ckpt files with<br/>threshold + AUROC)"]
-        WANDB["📈 WandB Dashboard<br/>(loss, AUROC, ROC curves)"]
+        CKPT["CNN Checkpoints<br/>(.ckpt files)"]
+        GBDT_CKPT["GBDT Models<br/>(.pkl files)"]
+        WANDB["📈 WandB Dashboard"]
     end
 
     subgraph Inference["🔮 Submission Pipeline"]
-        LOAD["Load checkpoints<br/>+ test data"]
-        PREDICT["Forward pass<br/>(image + tabular)"]
-        ENSEMBLE["Ensemble<br/>(avg probabilities)"]
+        LOAD["Load CNN checkpoints<br/>+ test data"]
+        PREDICT["CNN Forward pass<br/>(image + tabular)"]
+        CNN_ENS["CNN Ensemble<br/>(avg probabilities)"]
+        GBDT_STACK["🌲 GBDT Stacking<br/>(CNN probs + tabular<br/>→ final prediction)"]
         CSV["submission.csv"]
     end
 
@@ -45,10 +52,15 @@ flowchart TD
     MODEL --> TRAINER
     TRAINER --> CKPT
     TRAINER --> WANDB
+    CKPT --> EXTRACT
+    EXTRACT --> GBDT
+    GBDT --> GBDT_CKPT
     CKPT --> LOAD
     LOAD --> PREDICT
-    PREDICT --> ENSEMBLE
-    ENSEMBLE --> CSV
+    PREDICT --> CNN_ENS
+    CNN_ENS --> GBDT_STACK
+    GBDT_CKPT --> GBDT_STACK
+    GBDT_STACK --> CSV
 ```
 
 ---
@@ -314,6 +326,44 @@ flowchart LR
 
 ---
 
+## GBDT Stacking (Stage 2)
+
+The GBDT stacking layer is inspired by the 1st place ISIC 2024 solution. Instead of relying solely on CNN predictions, we train gradient-boosted trees on top of CNN outputs combined with tabular features.
+
+```mermaid
+flowchart LR
+    subgraph CNN_Probs["🧠 CNN Probabilities"]
+        P1["EfficientNet-B0<br/>p = 0.72"]
+        P2["ConvNeXt-Large<br/>p = 0.68"]
+    end
+
+    subgraph Tabular["📊 Tabular + Patient-Relative"]
+        TAB["43 tabular features"]
+        UG["Ugly Duckling Sign<br/>ratio / diff / z-score"]
+    end
+
+    subgraph GBDT_Models["🌲 GBDT Ensemble"]
+        LGB["LightGBM<br/>3 seeds × 5 folds"]
+        XGB["XGBoost<br/>3 seeds × 5 folds"]
+        CAT["CatBoost<br/>3 seeds × 5 folds"]
+    end
+
+    FINAL["📊 Final Prediction<br/>average of 45 GBDTs"]
+
+    P1 & P2 --> LGB & XGB & CAT
+    TAB & UG --> LGB & XGB & CAT
+    LGB & XGB & CAT --> FINAL
+```
+
+### Key Techniques
+
+- **Noise injection**: Gaussian noise (σ=0.1) added to CNN probabilities during GBDT training to prevent over-reliance on CNN predictions
+- **Patient-relative features**: For each CNN probability, ratio/diff/z-score vs. patient mean — implementing the "ugly duckling" sign
+- **Multi-seed training**: Each GBDT type trained with 3 seeds (42, 123, 456) for variance reduction
+- **Optimal threshold**: Each GBDT finds its best threshold using Youden's J statistic (max TPR − FPR)
+
+---
+
 ## Tools & Libraries
 
 | Tool | What it does | Why we use it |
@@ -326,20 +376,41 @@ flowchart LR
 | **torchmetrics** | Metric computation | Efficient AUROC and ROC curve computation |
 | **WandB** | Experiment tracking | Training curves, ROC plots, hyperparameters dashboard |
 | **h5py** | HDF5 file I/O | Reads images from competition's HDF5 format |
-| **Gradio** | Web UI | Interactive prediction demo |
+| **LightGBM** | Gradient boosting | Fast GBDT for Stage 2 stacking |
+| **XGBoost** | Gradient boosting | Mature GBDT implementation for stacking |
+| **CatBoost** | Gradient boosting | GBDT with built-in class balancing |
+| **scikit-learn** | ML utilities | AUROC, ROC curve, metrics for GBDT evaluation |
+| **Gradio** | Web UI | Interactive prediction demo with pipeline visualization |
 
 ---
 
 ## How to Run
 
-### Training (on Kaggle)
+### Stage 1: CNN Training (on Kaggle)
 
 1. Open `notebooks/skin-cancer-detection.ipynb` in Kaggle
 2. Attach the `isic-2024-challenge` dataset
 3. Set `MODELS_TO_TRAIN` and `FOLDS_TO_TRAIN` in Cell 4
-4. Run all cells → checkpoints saved to `/kaggle/working/checkpoints/`
+4. Run the CNN training cells → checkpoints saved
 
-### Training (Local)
+### Stage 2: GBDT Stacking
+
+After CNN training, run the GBDT cells in the notebook or from CLI:
+
+```bash
+# Extract CNN predictions
+python src/gbdt/extract_cnn_features.py \
+    --checkpoint-dir checkpoints/ \
+    --data-dir data/isic-2024-challenge
+
+# Train GBDT models
+python src/gbdt/train_gbdt.py \
+    --features-dir outputs/gbdt_features \
+    --output-dir checkpoints/gbdt \
+    --seeds 42 123 456
+```
+
+### CNN Training (Local)
 
 ```bash
 python src/train.py experiment=isic_efficientnet_b0 data.fold=0 logger=wandb
@@ -348,8 +419,8 @@ python src/train.py experiment=isic_efficientnet_b0 data.fold=0 logger=wandb
 ### Submission (on Kaggle)
 
 1. Open `notebooks/submission.ipynb`
-2. Attach competition data + your training notebook output as a dataset
-3. Run all cells → `submission.csv` generated
+2. Attach competition data + CNN checkpoints + GBDT checkpoints as datasets
+3. Run all cells → `submission.csv` generated (uses GBDT stacking if available)
 4. Submit the notebook
 
 > 📖 [Technical reference](reference.md) &nbsp;|&nbsp; [Gradio demo guide](gradio-demo.md)

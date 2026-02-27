@@ -50,7 +50,7 @@ Built for the [**ISIC 2024 — Skin Cancer Detection with 3D-TBP**](https://www.
 
 ## 🏗️ Architecture
 
-The model fuses **image features** from a pretrained CNN/Transformer backbone with **42 clinical tabular features** (patient demographics, lesion color/shape/symmetry measurements) through a learned MLP head.
+The model fuses **image features** from a pretrained CNN/Transformer backbone with **42 clinical tabular features** (patient demographics, lesion color/shape/symmetry measurements) through a learned MLP head. An optional **GBDT stacking** layer (LightGBM, XGBoost, CatBoost) can be trained on top of CNN predictions for improved accuracy.
 
 ```mermaid
 flowchart LR
@@ -64,13 +64,20 @@ flowchart LR
         NORM --> TVEC["Tabular Vector<br/>(42-dim)"]
     end
 
-    subgraph Fusion["Fusion Head"]
+    subgraph Fusion["Stage 1: CNN Fusion Head"]
         CONCAT["Concatenate"] --> MLP["MLP<br/>1322 → 128 → 1"]
-        MLP --> PRED["Malignant /<br/>Benign"]
+        MLP --> CNN_PROB["CNN Probability"]
+    end
+
+    subgraph GBDT["Stage 2: GBDT Stacking"]
+        GBDT_IN["CNN probs +<br/>tabular + patient<br/>relative features"] --> GBDT_ENS["🌲 GBDT Ensemble<br/>LightGBM / XGBoost /<br/>CatBoost"]
+        GBDT_ENS --> PRED["Malignant /<br/>Benign"]
     end
 
     FEAT --> CONCAT
     TVEC --> CONCAT
+    CNN_PROB --> GBDT_IN
+    TVEC --> GBDT_IN
 ```
 
 > 📖 **Detailed architecture docs**: [docs/architecture.md](docs/architecture.md)
@@ -157,6 +164,20 @@ python src/ensemble_predict.py \
     --output-csv results.csv
 ```
 
+### 6. Train GBDT Stacking (optional)
+
+```bash
+# Extract CNN predictions for GBDT training
+python src/gbdt/extract_cnn_features.py \
+    --checkpoint-dir checkpoints/ \
+    --data-dir data/isic-2024-challenge
+
+# Train GBDT models (LightGBM, XGBoost, CatBoost)
+python src/gbdt/train_gbdt.py \
+    --features-dir outputs/gbdt_features \
+    --output-dir checkpoints/gbdt
+```
+
 ---
 
 ## 🎨 Gradio Demo
@@ -188,19 +209,25 @@ Skin-Cancer-Detection/
 │   ├── models/isic_module.py   #   🧠 Model (backbone + fusion MLP)
 │   ├── data/isic_datamodule.py #   📊 Data loading + tabular features
 │   ├── ensemble_predict.py     #   🔮 Multi-model ensemble CLI
+│   ├── gbdt/                   #   🌲 GBDT stacking pipeline
+│   │   ├── extract_cnn_features.py  # Extract CNN predictions
+│   │   ├── train_gbdt.py            # Train LightGBM/XGBoost/CatBoost
+│   │   └── predict_gbdt.py          # GBDT ensemble inference
 │   ├── gradio_app.py           #   🎨 Web demo UI
 │   └── train.py                #   🚀 Training entry point
 ├── scripts/
 │   └── download_checkpoints.py #   ⬇️  Download models from HF Hub
 ├── notebooks/
-│   ├── skin-cancer-detection.ipynb   # Training notebook (Kaggle/Colab)
-│   └── submission.ipynb              # Competition submission
+│   ├── skin-cancer-detection.ipynb   # Training notebook (CNN + GBDT)
+│   └── submission.ipynb              # Competition submission (with GBDT stacking)
 ├── docs/                       # Detailed documentation
 │   ├── architecture.md         #   System architecture & diagrams
 │   ├── reference.md            #   Technical reference
 │   ├── gradio-demo.md          #   Gradio demo guide
 │   └── future-improvements.md  #   Roadmap from competition analysis
 ├── checkpoints/                # Model checkpoints (git-ignored)
+│   ├── efficientnet_b0/        #   CNN checkpoints by model
+│   └── gbdt/                   #   GBDT models (.pkl + _info.json)
 ├── data/                       # Dataset files (git-ignored)
 └── requirements.txt
 ```
