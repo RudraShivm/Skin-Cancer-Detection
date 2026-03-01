@@ -143,6 +143,7 @@ class ISICDataModule(L.LightningDataModule):
         n_folds: int = 5,
         img_size: int = 224,
         data_fraction: float = 1.0,
+        drop_last: bool = False,
     ):
         """Initialize ISIC DataModule.
 
@@ -363,6 +364,7 @@ class ISICDataModule(L.LightningDataModule):
             persistent_workers=self.hparams.persistent_workers,
             prefetch_factor=2 if self.hparams.num_workers > 0 else None,
             shuffle=True,
+            drop_last=self.hparams.drop_last,
         )
 
     def val_dataloader(self) -> EVAL_DATALOADERS:
@@ -375,6 +377,7 @@ class ISICDataModule(L.LightningDataModule):
             persistent_workers=self.hparams.persistent_workers,
             prefetch_factor=2 if self.hparams.num_workers > 0 else None,
             shuffle=False,
+            drop_last=self.hparams.drop_last,
         )
 
     def test_dataloader(self) -> EVAL_DATALOADERS:
