@@ -37,6 +37,7 @@ rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
 from src.data.isic_datamodule import ISICDataModule, TABULAR_NUM_COLS
 from src.models.isic_module import ISICLitModule
+from src.ensemble_predict import load_model_from_checkpoint
 
 
 def get_model_img_size(model: ISICLitModule) -> int:
@@ -198,7 +199,7 @@ def extract_features_for_fold(
 
         print(f"  📦 Loading {model_name}/fold_{fold}: {os.path.basename(ckpt_path)}")
         try:
-            model = ISICLitModule.load_ckpt(ckpt_path, device)
+            model = load_model_from_checkpoint(ckpt_path, device)
             img_size = get_model_img_size(model)
 
             # Rebuild the data module with the correct image size for this model
