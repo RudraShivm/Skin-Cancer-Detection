@@ -476,10 +476,12 @@ def main():
                 except ImportError as e:
                     print(f"     ❌ {gbdt_type} not installed: {e}")
                     print(f"        Install: pip install {gbdt_type}")
+                    raise e
                 except Exception as e:
                     print(f"     ❌ Error training {model_name}: {e}")
                     import traceback
                     traceback.print_exc()
+                    raise e
 
     # Summary
     if all_results:

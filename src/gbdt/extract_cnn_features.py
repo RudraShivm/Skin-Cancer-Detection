@@ -253,6 +253,7 @@ def extract_features_for_fold(
             print(f"  ❌ Error loading {model_name}/fold_{fold}: {e}")
             import traceback
             traceback.print_exc()
+            raise e  # Do not swallow critical errors silently
 
     if not found_any:
         return None

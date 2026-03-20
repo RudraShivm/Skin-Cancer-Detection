@@ -143,7 +143,19 @@ def load_model_from_checkpoint(ckpt_path: str, device: torch.device) -> ISICLitM
     Returns:
         Loaded ISICLitModule
     """
-    model = ISICLitModule.load_from_checkpoint(ckpt_path, map_location=device)
+    import pathlib
+    # Windows compatibility for checkpoints trained on Linux (e.g. Kaggle/Colab)
+    temp = None
+    if os.name == 'nt':
+        temp = pathlib.PosixPath
+        pathlib.PosixPath = pathlib.WindowsPath
+        
+    try:
+        model = ISICLitModule.load_from_checkpoint(ckpt_path, map_location=device)
+    finally:
+        if temp is not None:
+            pathlib.PosixPath = temp
+
     model.eval()
     model.to(device)
     return model
