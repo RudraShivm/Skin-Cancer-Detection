@@ -304,7 +304,7 @@ def main():
         print(f"❌ No model directories found in {args.checkpoint_dir}")
         sys.exit(1)
 
-    print(f"\n🔍 Found {len(model_names)} model architecture(s): {model_names}")
+    print(f"\n Found {len(model_names)} model architecture(s): {model_names}")
 
     # Extract features for each fold
     for fold in range(args.n_folds):

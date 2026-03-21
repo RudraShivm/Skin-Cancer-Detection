@@ -153,5 +153,6 @@ configs/local/default.yaml
 # Aim logging
 .aim
 
-
-*.ckpt
+checkpoints/efficientnet_b0/*
+checkpoints/mobilenet_v3/*
+checkpoints/gbdt/*

@@ -1,0 +1,9 @@
+{
+  "title": "Skin Cancer Detection models",
+  "id": "rudrashivm/isic2024-models",
+  "licenses": [
+    {
+      "name": "apache-2.0"
+    }
+  ]
+}

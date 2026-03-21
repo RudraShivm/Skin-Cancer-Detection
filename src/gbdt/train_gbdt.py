@@ -253,6 +253,7 @@ def train_xgboost(
         "scale_pos_weight": scale_pos_weight,
         "verbosity": 0,
         "tree_method": "hist",
+        "early_stopping_rounds": 50,
     }
     params.update(kwargs)
 
