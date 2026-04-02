@@ -2,6 +2,22 @@
 
 > **[← Back to README](../README.md)**
 
+This document explains how the project turns lesion images and clinical metadata into final malignant/benign predictions, and how the second-stage stacker improves ranking performance.
+
+## Table of Contents
+
+- [What This Project Does](#what-this-project-does)
+- [System Overview](#system-overview)
+- [How the Model Works](#how-the-model-works)
+- [Tabular Features](#tabular-features)
+- [Data Augmentation](#data-augmentation)
+- [Training Pipeline](#training-pipeline)
+- [Cross-Validation \& Ensemble](#cross-validation--ensemble)
+- [ABCD Rule Connection](#abcd-rule-connection)
+- [GBDT Stacking (Stage 2)](#gbdt-stacking-stage-2)
+- [Tools \& Libraries](#tools--libraries)
+- [How to Run](#how-to-run)
+
 ---
 
 ## What This Project Does
@@ -88,14 +104,14 @@ flowchart LR
     end
 
     subgraph Tabular_Path["📊 Tabular Path"]
-        TAB["42 Clinical Features<br/>(age, size, color,<br/>symmetry, ...)"]
+        TAB["Clinical Features<br/>(age, size, color,<br/>symmetry, ...)"]
         NORM["Standardize<br/>(zero mean,<br/>unit variance)"]
-        TABOUT["Tabular Vector<br/>(42-dim)"]
+        TABOUT["Encoded Tabular Vector"]
     end
 
     subgraph Fusion["🔗 Fusion"]
-        CONCAT["Concatenate<br/>(1280 + 42 = 1322 dims)"]
-        MLP["Fusion MLP<br/>1322 → 128 → 1"]
+        CONCAT["Concatenate<br/>(image + metadata)"]
+        MLP["Fusion MLP<br/>image_dim + n_tabular → 128 → 1"]
         LOGIT["1 logit → sigmoid<br/>→ probability"]
         PRED["Prediction:<br/>malignant or benign"]
     end
@@ -107,15 +123,17 @@ flowchart LR
     CONCAT --> MLP --> LOGIT --> PRED
 ```
 
+<!-- TODO: verify and harmonize the exact encoded tabular feature count across docs and implementation. -->
+
 ### Step-by-Step Explanation
 
 1. **Image Path**: The skin lesion photo (256×256) goes through a pre-trained backbone network (like EfficientNet). This backbone was originally trained on ImageNet (millions of everyday objects) and has learned to extract visual features (edges, textures, colors). We strip off its final classification layer and use the **feature vector** it produces (e.g., 1280 numbers that represent the image).
 
-2. **Tabular Path**: 42 clinical measurements are extracted from the metadata CSV. These are standardized so each feature has mean=0 and std=1 (otherwise features with large values like `tbp_lv_y=1500` would dominate over features like `eccentricity=0.9`).
+2. **Tabular Path**: Clinical measurements are extracted from the metadata CSV and encoded into a structured vector. These values are standardized so high-magnitude fields do not dominate lower-range but clinically useful signals.
 
-3. **Fusion**: The image feature vector (1280 dims) and tabular vector (42 dims) are concatenated into one long vector (1322 dims). This goes through a small MLP that learns to combine both signals:
+3. **Fusion**: The image feature vector and tabular vector are concatenated into one representation. This goes through a small MLP that learns how to combine visual and structured signals:
    ```
-   Linear(1322 → 128) → BatchNorm → ReLU → Dropout → Linear(128 → 1)
+   Linear(image_dim + n_tabular → 128) → BatchNorm → ReLU → Dropout → Linear(128 → 1)
    ```
    The final output is a single number (logit). We apply sigmoid to get a probability between 0 and 1.
 
@@ -127,10 +145,10 @@ The metadata CSV contains clinical measurements taken by the 3D-TBP system.
 
 ### Standardization (Patient-Wise)
 
-Before being fed to the model, tabular features are standardized (zero mean, unit variance).
-This project uses **Patient-Wise Standardization** for all models. Instead of using global dataset statistics, it computes the mean and standard deviation for *each patient individually*. This implements the "ugly duckling" concept — highlighting how much a lesion deviates from the patient's own normal skin, rather than the global population.
+Before being fed to the model, tabular features are standardized. This project uses **patient-wise standardization** for the multimodal pipeline. Instead of using only global dataset statistics, it computes the mean and standard deviation for each patient individually so lesions become relative to that patient's own baseline.
 
-**Fallback Mechanism**: If a patient only has one lesion (which occurs in single-image inference in the **Gradio app**, or for patients with only one image in the dataset), the standardization automatically falls back to Global Training Statistics. However, the logic is unified and ready to handle multi-image batches in Gradio.
+**Fallback mechanism:** if a patient only has one lesion, standardization falls back to global training statistics. That keeps single-image inference workable in places like the Gradio app, where full patient context may not be available.
+
 ### Patient Demographics
 
 | Feature | What it is |
@@ -338,7 +356,7 @@ flowchart LR
     end
 
     subgraph Tabular["📊 Tabular + Patient-Relative"]
-        TAB["43 tabular features"]
+        TAB["Encoded tabular features"]
         UG["Ugly Duckling Sign<br/>ratio / diff / z-score"]
     end
 
@@ -410,11 +428,15 @@ python src/gbdt/train_gbdt.py \
     --seeds 42 123 456
 ```
 
+**Expected:** fold-level feature CSVs appear under `outputs/gbdt_features/`, then trained `.pkl` models and metadata JSON files appear under `checkpoints/gbdt/`.
+
 ### CNN Training (Local)
 
 ```bash
 python src/train.py experiment=isic_efficientnet_b0 data.fold=0 logger=wandb
 ```
+
+**Expected:** the trainer logs split statistics and validation metrics, and writes checkpoints under `logs/checkpoints/`.
 
 ### Submission (on Kaggle)
 
