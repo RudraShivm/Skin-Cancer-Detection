@@ -60,7 +60,7 @@ This repository was built for the [ISIC 2024: Skin Cancer Detection with 3D-TBP]
 > [!NOTE]
 > The competition uses **partial AUC (pAUC)** above **80% true positive rate**. That matters in screening: the model is rewarded most for ranking cancers well in the high-sensitivity region, where false negatives are especially costly.
 
-## Results
+## Kaggle Submission Results
 
 | System | Private pAUC | Public pAUC |
 |--------|--------------|-------------|
