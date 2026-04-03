@@ -24,6 +24,9 @@ This document explains how the project turns lesion images and clinical metadata
 
 This project **detects skin cancer from photos**. Given a photo of a skin lesion (mole/spot) and clinical measurements, it predicts whether the lesion is **malignant** (cancerous) or **benign** (harmless).
 
+> **🚀 TL;DR**: We don't just look at pixels. We combine **images** (via a CNN) with **clinical patient data** (like age, size, and geometry). Then, instead of stopping there, we pass those predictions into **Gradient Boosted Decision Trees (GBDTs)** alongside patient-relative data ("does this mole look different from the patient's other moles?"). This two-stage process dramatically improves accuracy in ranking borderline-malignant cases.
+
+
 It was built for the [ISIC 2024 Kaggle Competition](https://www.kaggle.com/competitions/isic-2024-challenge), which uses images from 3D Total Body Photography (3D-TBP) — a system that photographs a patient's entire body and extracts crops of individual lesions.
 
 ---

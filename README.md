@@ -2,9 +2,7 @@
 
 # 🔬 Skin Cancer Detection with 3D-TBP
 
-**Detect malignant skin lesions from photos and clinical context using a two-stage pipeline: a multimodal CNN first, then GBDT stacking to sharpen screening performance where missed cancers matter most.**
-
-> Demo GIF placeholder: add a short product walkthrough here showing training, CLI inference, and the Gradio demo.
+**Detect malignant skin lesions from photos and clinical context using a two-stage pipeline: a multimodal CNN first, then GBDT stacking to optimize diagnostic sensitivity and minimize false negatives in clinical screening environments.**
 
 [![Python](https://img.shields.io/badge/Python-3.9+-3776AB?logo=python&logoColor=white)](https://python.org)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org)
@@ -23,9 +21,10 @@
 
 ---
 
-## Table of Contents
+## 📑 Table of Contents
 
-- [Why This Matters](#why-this-matters)
+- [💡 Why This Matters](#-why-this-matters)
+- [✨ Key Highlights](#-key-highlights)
 - [Competition Snapshot](#competition-snapshot)
 - [Results](#results)
 - [Architecture](#architecture)
@@ -39,11 +38,12 @@
 
 ---
 
-## Why This Matters
+## 💡 Why This Matters
 
-Skin cancer is the most common cancer worldwide, and catching malignant lesions early can materially change treatment options and outcomes. The challenge is access: specialist review is limited in many settings, so strong AI systems can help act as a scalable second opinion, especially in underserved regions where dermatology expertise is harder to reach.
+Skin cancer is the most common cancer worldwide. Catching malignant lesions early can drastically improve treatment outcomes. However, **specialist review is geographically and economically constrained**.
 
-This repository was built for the [ISIC 2024: Skin Cancer Detection with 3D-TBP](https://www.kaggle.com/competitions/isic-2024-challenge) Kaggle competition, using lesion crops plus structured clinical metadata from 3D Total Body Photography.
+This project provides an open-source, robust AI system that acts as a scalable second opinion. Built for the [ISIC 2024: Skin Cancer Detection with 3D-TBP](https://www.kaggle.com/competitions/isic-2024-challenge) Kaggle competition, it combines lesion images with structured clinical metadata (from 3D Total Body Photography) to emulate the holistic review process of a real dermatologist.
+
 
 ---
 
@@ -75,44 +75,34 @@ This repository was built for the [ISIC 2024: Skin Cancer Detection with 3D-TBP]
 The current system is intentionally split into two stages. Stage 1 learns a strong multimodal lesion score from pixels plus metadata. Stage 2 treats those CNN outputs as features and lets boosted trees re-rank lesions using structured and patient-relative signals.
 
 ```mermaid
-flowchart LR
-    classDef image fill:#EAF4FF,stroke:#1E88E5,color:#0D47A1,stroke-width:1px;
-    classDef tab fill:#FFF4E5,stroke:#FB8C00,color:#8A4B00,stroke-width:1px;
-    classDef fusion fill:#EAF7EE,stroke:#2E7D32,color:#1B5E20,stroke-width:1px;
-    classDef stack fill:#FDECEF,stroke:#D81B60,color:#880E4F,stroke-width:1px;
-    classDef out fill:#F3F4F6,stroke:#6B7280,color:#111827,stroke-width:1px;
+flowchart TD
+    classDef image fill:#EAF4FF,stroke:#1E88E5,color:#0D47A1,stroke-width:1.5px;
+    classDef tab fill:#FFF4E5,stroke:#FB8C00,color:#8A4B00,stroke-width:1.5px;
+    classDef fusion fill:#EAF7EE,stroke:#2E7D32,color:#1B5E20,stroke-width:1.5px;
+    classDef stack fill:#FDECEF,stroke:#D81B60,color:#880E4F,stroke-width:1.5px;
+    classDef out fill:#F3F4F6,stroke:#6B7280,color:#111827,stroke-width:1.5px;
 
-    subgraph INPUT["📥 Inputs"]
-        IMG["🖼️ Lesion crop<br/>256×256 image"]:::image
-        META["📋 Clinical metadata<br/>demographics + 3D-TBP measurements"]:::tab
+    subgraph S1["🧠 Stage 1 — Multimodal CNN"]
+        direction LR
+        IMG["🖼️ Image<br/>lesion crop"]:::image --> BACKBONE["🧬 Backbone<br/>TIMM encoder"]:::image
+        META["📋 Metadata<br/>clinical + 3D-TBP"]:::tab --> TAB["🧮 Tabular<br/>encoding"]:::tab
+        BACKBONE --> FUSE["🔗 Fusion MLP<br/>image + metadata"]:::fusion
+        TAB --> FUSE
+        FUSE --> CNN["📈 CNN score"]:::fusion
     end
 
-    subgraph STAGE1["🧠 Stage 1: CNN Fusion"]
-        BACKBONE["🧬 TIMM backbone<br/>ImageNet pretrained"]:::image
-        IMGFEAT["🔍 Image embedding"]:::image
-        NORM["⚖️ Feature normalization"]:::tab
-        TABFEAT["🧮 Tabular vector"]:::tab
-        CONCAT["🔗 Fuse image + metadata"]:::fusion
-        MLP["⚙️ Fusion MLP<br/>malignancy logit"]:::fusion
-        CNNPROB["📈 CNN probability"]:::fusion
+    CNN --> STACKIN
+
+    subgraph S2["🌲 Stage 2 — GBDT Stacking"]
+        direction LR
+        REL["🦆 Relative signals<br/>ratio / diff / z-score"]:::stack --> STACKIN["📦 Stacker input<br/>CNN + tabular + relative"]:::stack
+        STACKIN --> GBDT["🌲 45 GBDTs<br/>LGBM / XGB / CatBoost"]:::stack
     end
 
-    subgraph STAGE2["🌲 Stage 2: GBDT Stacking"]
-        REL["🧾 Patient-relative features<br/>ratio / diff / z-score"]:::stack
-        STACKIN["📦 CNN probs + tabular + relative signals"]:::stack
-        GBDT["🌲 LightGBM / XGBoost / CatBoost"]:::stack
-        FINAL["✅ Final malignant / benign prediction"]:::out
-    end
-
-    IMG --> BACKBONE --> IMGFEAT --> CONCAT
-    META --> NORM --> TABFEAT --> CONCAT
-    CONCAT --> MLP --> CNNPROB --> STACKIN
-    TABFEAT --> STACKIN
-    REL --> STACKIN
-    STACKIN --> GBDT --> FINAL
+    GBDT --> FINAL["✅ Final prediction"]:::out
 ```
 
-**Caption:** The first stage learns a lesion representation from image evidence and clinical context. The second stage uses gradient-boosted trees to combine CNN probabilities with tabular and patient-relative features, which is especially effective for structured ranking signals near the competition's high-sensitivity operating region.
+**Caption:** Stage 1 learns a multimodal lesion score from pixels plus structured metadata. Stage 2 re-ranks that signal with boosted trees using tabular and patient-relative cues, which is where the ugly duckling context becomes explicit.
 
 Color key: **blue** = image pathway, **amber** = metadata pathway, **green** = multimodal fusion, **rose** = stage-2 stacking.
 
@@ -124,25 +114,94 @@ Color key: **blue** = image pathway, **amber** = metadata pathway, **green** = m
 
 ### 1. Optimize for pAUC, not generic AUC
 
-The project is tuned around **pAUC above 80% TPR** because that is the actual competition target and the medically relevant regime for screening. This worked because it pushes model selection toward systems that stay useful when sensitivity must remain high, instead of rewarding performance gains in operating regions that matter less for cancer detection.
+The project is tuned around **pAUC above 80% TPR** because that is the competition target and the screening setting is recall-sensitive. The impact is simple: model selection is pushed toward systems that keep cancers ranked high where false negatives hurt most.
 
-### 2. Use multimodal fusion instead of image-only classification
+### 2. Split by patient, not by image
 
-The first stage does not rely on pixels alone. It combines lesion images with structured clinical metadata so the model can use the same kinds of context a dermatologist would care about, such as lesion geometry, body site, and demographic signals. This worked because the metadata branch adds complementary signal that is hard to infer reliably from the image by itself.
+Cross-validation is built with **patient-level stratified folds**, not random image splits. That matters because the same patient can contribute multiple lesions; splitting by `patient_id` prevents leakage and produces a more honest validation signal.
 
-### 3. Keep the tabular branch clinically focused
+```mermaid
+flowchart LR
+    classDef patientA fill:#DBEAFE,stroke:#2563EB,color:#0F172A,stroke-width:1.5px;
+    classDef patientB fill:#FCE7F3,stroke:#DB2777,color:#4A044E,stroke-width:1.5px;
+    classDef train fill:#ECFDF3,stroke:#16A34A,color:#052E16,stroke-width:1.5px;
+    classDef val fill:#FEF2F2,stroke:#DC2626,color:#450A0A,stroke-width:1.5px;
+    classDef bad fill:#FEF3C7,stroke:#D97706,color:#78350F,stroke-width:1.5px;
+    classDef good fill:#E0F2FE,stroke:#0891B2,color:#083344,stroke-width:1.5px;
 
-Rather than feeding every available metadata field into the network without constraint, the design uses a curated set of clinically meaningful structured features. This worked because it keeps the fusion head compact, reduces noisy inputs, and makes the second-stage stacker easier to train on features that are already aligned with the diagnostic task.
+    subgraph Wrong["Image-level random split"]
+        direction TB
+        WA1["Patient A<br/>lesion 1"]:::patientA --> WTR["Train"]:::train
+        WA2["Patient A<br/>lesion 2"]:::patientA --> WVA["Val"]:::val
+        WA3["Patient A<br/>lesion 3"]:::patientA --> WTR
+        WB1["Patient B<br/>lesion 1"]:::patientB --> WVA
+        LEAK["Leakage:<br/>same patient contributes to both splits"]:::bad
+    end
 
-### 4. Stack GBDTs on top of CNN probabilities
+    subgraph Right["Patient-level split"]
+        direction TB
+        RA["Patient A<br/>all lesions"]:::patientA --> RTR["Train only"]:::train
+        RB["Patient B<br/>all lesions"]:::patientB --> RVA["Val only"]:::val
+        HONEST["No patient overlap:<br/>validation measures generalization to unseen patients"]:::good
+    end
+```
 
-The system treats the multimodal CNN as a strong feature generator, then lets LightGBM, XGBoost, and CatBoost re-rank cases using CNN outputs plus structured inputs. This worked because boosted trees are especially effective at exploiting tabular interactions and calibration-like patterns that remain after the neural network has done the heavy lifting on visual representation learning.
+```python
+patient_targets = df.groupby("patient_id")["target"].mean()
+patient_targets = (patient_targets > 0.5).astype(int)
+skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+```
+
+### 3. Use multimodal fusion instead of image-only classification
+
+Stage 1 combines lesion images with structured metadata rather than relying on pixels alone. That gives the model access to geometry, site, demographic, and 3D-TBP signals that are hard to infer reliably from the image by itself.
+
+### 4. Keep the tabular branch clinically focused
+
+The metadata branch uses a curated set of clinically meaningful columns instead of every raw field in the CSV. This keeps the fusion head compact and makes the second-stage stacker easier to train on cleaner structured inputs.
 
 ### 5. Add patient-relative normalization and "ugly duckling" signals
 
-Skin lesions are often suspicious not only because of what they are in isolation, but because of how different they look from a patient's other lesions. The pipeline captures that idea with patient-wise standardization and relative features such as ratios, differences, and z-scores. This worked because it turns patient context into explicit model input instead of forcing the model to infer that relationship indirectly.
+The pipeline does not only ask whether a lesion looks suspicious in isolation; it also asks whether it looks unusual **for that patient**. Patient-wise standardization plus ratio/diff/z-score features turn that intuition into explicit model input.
 
-<!-- TODO: verify and harmonize the exact encoded tabular feature count across docs/code before stating a single number everywhere. -->
+```mermaid
+flowchart LR
+    classDef signature fill:#F8FAFC,stroke:#64748B,color:#0F172A,stroke-width:1.5px;
+    classDef compare fill:#EEF2FF,stroke:#6366F1,color:#1E1B4B,stroke-width:1.5px;
+    classDef outlier fill:#FFF1F2,stroke:#E11D48,color:#4C0519,stroke-width:1.5px;
+    classDef signal fill:#ECFDF3,stroke:#22C55E,color:#052E16,stroke-width:1.5px;
+
+    subgraph Family["Patient's signature nevus family"]
+        direction LR
+        N1["Lesion A"]:::signature
+        N2["Lesion B"]:::signature
+        N3["Lesion C"]:::signature
+        SIG["Shared patient signature<br/>similar color / structure / pattern"]:::compare
+        N1 --> SIG
+        N2 --> SIG
+        N3 --> SIG
+    end
+
+    DUCK["Lesion that does not fit<br/>the patient's signature"]:::outlier
+    SIG --> CMP["Compare every lesion<br/>against patient-specific baseline"]:::compare
+    DUCK --> CMP
+    CMP --> OUT["Relative features:<br/>ratio / diff / z-score"]:::signal
+    OUT --> FLAG["Higher suspicion"]:::signal
+```
+
+### 6. Stack GBDTs on top of CNN probabilities
+
+The GBDT stage learns on top of CNN scores, tabular features, and patient-relative signals. This works well because trees are strong at exploiting structured feature interactions and re-ranking borderline cases after the CNN has already extracted visual signal.
+
+### 7. Inject noise and average across seeds in Stage 2
+
+The stacker is not trained as one fragile tree model. It uses **LightGBM, XGBoost, and CatBoost** across multiple folds and seeds, and adds Gaussian noise to CNN probabilities during GBDT training so the trees do not overfit to raw CNN outputs.
+
+```python
+# 3 tree families × 5 folds × 3 seeds = 45 stage-2 models
+seeds: [2105152, 2105163, 2105170]
+noise_sigma: 0.1
+```
 
 ---
 
