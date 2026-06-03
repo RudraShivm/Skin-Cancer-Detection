@@ -75,34 +75,7 @@ This project provides an open-source, robust AI system that acts as a scalable s
 
 The current system is intentionally split into two stages. Stage 1 learns a strong multimodal lesion score from pixels plus metadata. Stage 2 treats those CNN outputs as features and lets boosted trees re-rank lesions using structured and patient-relative signals.
 
-```mermaid
-flowchart TD
-    classDef image fill:#EAF4FF,stroke:#1E88E5,color:#0D47A1,stroke-width:1.5px;
-    classDef tab fill:#FFF4E5,stroke:#FB8C00,color:#8A4B00,stroke-width:1.5px;
-    classDef fusion fill:#EAF7EE,stroke:#2E7D32,color:#1B5E20,stroke-width:1.5px;
-    classDef stack fill:#FDECEF,stroke:#D81B60,color:#880E4F,stroke-width:1.5px;
-    classDef out fill:#F3F4F6,stroke:#6B7280,color:#111827,stroke-width:1.5px;
-
-    subgraph S1["🧠 Stage 1 — Multimodal CNN"]
-        direction LR
-        IMG["🖼️ Image<br/>lesion crop"]:::image --> BACKBONE["🧬 Backbone<br/>TIMM encoder"]:::image
-        META["📋 Metadata<br/>clinical + 3D-TBP"]:::tab --> TAB["🧮 Tabular<br/>encoding"]:::tab
-        BACKBONE --> FUSE["🔗 Fusion MLP<br/>image + metadata"]:::fusion
-        TAB --> FUSE
-        FUSE --> CNN["📈 CNN score"]:::fusion
-    end
-
-    CNN --> STACKIN
-
-    subgraph S2["🌲 Stage 2 — GBDT Stacking"]
-        direction LR
-        REL["🦆 Relative signals<br/>ratio / diff / z-score"]:::stack --> STACKIN["📦 Stacker input<br/>CNN + tabular + relative"]:::stack
-        STACKIN --> GBDT["🌲 45 GBDTs<br/>LGBM / XGB / CatBoost"]:::stack
-    end
-
-    GBDT --> FINAL["✅ Final prediction"]:::out
-```
-
+<img src="docs/assets/architecture.png" alt="Two-stage CNN + GBDT stacked ensemble architecture." width="100%">
 **Caption:** Stage 1 learns a multimodal lesion score from pixels plus structured metadata. Stage 2 re-ranks that signal with boosted trees using tabular and patient-relative cues, which is where the ugly duckling context becomes explicit.
 
 Color key: **blue** = image pathway, **amber** = metadata pathway, **green** = multimodal fusion, **rose** = stage-2 stacking.
@@ -121,32 +94,7 @@ The project is tuned around **pAUC above 80% TPR** because that is the competiti
 
 Cross-validation is built with **patient-level stratified folds**, not random image splits. That matters because the same patient can contribute multiple lesions; splitting by `patient_id` prevents leakage and produces a more honest validation signal.
 
-```mermaid
-flowchart LR
-    classDef patientA fill:#DBEAFE,stroke:#2563EB,color:#0F172A,stroke-width:1.5px;
-    classDef patientB fill:#FCE7F3,stroke:#DB2777,color:#4A044E,stroke-width:1.5px;
-    classDef train fill:#ECFDF3,stroke:#16A34A,color:#052E16,stroke-width:1.5px;
-    classDef val fill:#FEF2F2,stroke:#DC2626,color:#450A0A,stroke-width:1.5px;
-    classDef bad fill:#FEF3C7,stroke:#D97706,color:#78350F,stroke-width:1.5px;
-    classDef good fill:#E0F2FE,stroke:#0891B2,color:#083344,stroke-width:1.5px;
-
-    subgraph Wrong["Image-level random split"]
-        direction TB
-        WA1["Patient A<br/>lesion 1"]:::patientA --> WTR["Train"]:::train
-        WA2["Patient A<br/>lesion 2"]:::patientA --> WVA["Val"]:::val
-        WA3["Patient A<br/>lesion 3"]:::patientA --> WTR
-        WB1["Patient B<br/>lesion 1"]:::patientB --> WVA
-        LEAK["Leakage:<br/>same patient contributes to both splits"]:::bad
-    end
-
-    subgraph Right["Patient-level split"]
-        direction TB
-        RA["Patient A<br/>all lesions"]:::patientA --> RTR["Train only"]:::train
-        RB["Patient B<br/>all lesions"]:::patientB --> RVA["Val only"]:::val
-        HONEST["No patient overlap:<br/>validation measures generalization to unseen patients"]:::good
-    end
-```
-
+<img src="docs/assets/patient-level_stratified_folds.png" alt="patient-level stratified folds" width="100%">
 ```python
 patient_targets = df.groupby("patient_id")["target"].mean()
 patient_targets = (patient_targets > 0.5).astype(int)
@@ -165,30 +113,7 @@ The metadata branch uses a curated set of clinically meaningful columns instead 
 
 The pipeline does not only ask whether a lesion looks suspicious in isolation; it also asks whether it looks unusual **for that patient**. Patient-wise standardization plus ratio/diff/z-score features turn that intuition into explicit model input.
 
-```mermaid
-flowchart LR
-    classDef signature fill:#F8FAFC,stroke:#64748B,color:#0F172A,stroke-width:1.5px;
-    classDef compare fill:#EEF2FF,stroke:#6366F1,color:#1E1B4B,stroke-width:1.5px;
-    classDef outlier fill:#FFF1F2,stroke:#E11D48,color:#4C0519,stroke-width:1.5px;
-    classDef signal fill:#ECFDF3,stroke:#22C55E,color:#052E16,stroke-width:1.5px;
-
-    subgraph Family["Patient's signature nevus family"]
-        direction LR
-        N1["Lesion A"]:::signature
-        N2["Lesion B"]:::signature
-        N3["Lesion C"]:::signature
-        SIG["Shared patient signature<br/>similar color / structure / pattern"]:::compare
-        N1 --> SIG
-        N2 --> SIG
-        N3 --> SIG
-    end
-
-    DUCK["Lesion that does not fit<br/>the patient's signature"]:::outlier
-    SIG --> CMP["Compare every lesion<br/>against patient-specific baseline"]:::compare
-    DUCK --> CMP
-    CMP --> OUT["Relative features:<br/>ratio / diff / z-score"]:::signal
-    OUT --> FLAG["Higher suspicion"]:::signal
-```
+<img src="docs/assets/ugly_duckling.png" alt="ugly duckling" width="100%">
 
 ### 6. Stack GBDTs on top of CNN probabilities
 
