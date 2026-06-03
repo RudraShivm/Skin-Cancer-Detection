@@ -30,6 +30,7 @@
 - [Architecture](#architecture)
 - [Key Design Decisions](#key-design-decisions)
 - [Model Zoo](#model-zoo)
+- [ONNX / INT8 Benchmark](#onnx--int8-benchmark)
 - [Quick Start](#quick-start)
 - [Demo](#demo)
 - [Project Structure](#project-structure)
@@ -224,6 +225,29 @@ python scripts/download_checkpoints.py --model efficientnet_b0
 
 ---
 
+## ONNX / INT8 Benchmark
+
+To test edge-deployment feasibility, one MobileNetV3 fold checkpoint was exported to ONNX and quantized with post-training static INT8 quantization. This benchmark uses the held-out validation fold for that checkpoint, so it measures FP32 vs INT8 on unseen fold-2 validation data rather than training rows.
+
+| Variant | Size | Mean Latency / Image | P95 | P99 | AUROC | pAUC |
+|---------|------|----------------------|-----|-----|-------|------|
+| FP32 ONNX | 16.69 MB | 4.48 ms | 4.59 ms | 5.74 ms | 0.97963 | 0.94735 |
+| INT8 ONNX | 4.67 MB | 9.95 ms | 11.40 ms | 11.59 ms | 0.96075 | 0.91325 |
+
+**Benchmark setup:** MobileNetV3 fold-2 checkpoint, validation fold 2, 256x256 images, batch size 16, ONNX Runtime `CPUExecutionProvider`.
+
+**Takeaway:** INT8 reduced model size by **3.57x**, but it was slower in this CPU runtime setup and reduced AUROC by **0.01888** and pAUC by **0.03409**. That makes the INT8 artifact useful as a compact deployment experiment, but not automatically better than FP32 for latency on this machine.
+
+```bash
+# Quantize the exported ONNX model
+python src/onnx/onnx_int8_quant.py
+
+# Benchmark FP32 vs INT8 on the held-out validation fold
+python src/onnx/onnx_benchmark.py
+```
+
+---
+
 ## Quick Start
 
 ### 1. Clone the repo and install dependencies
@@ -353,6 +377,7 @@ Skin-Cancer-Detection/
 │   ├── data/
 │   ├── models/
 │   ├── gbdt/
+│   ├── onnx/
 │   ├── ensemble_predict.py
 │   └── train.py
 ├── scripts/
@@ -360,6 +385,7 @@ Skin-Cancer-Detection/
 ├── docs/
 ├── demo/
 ├── checkpoints/
+├── onnx_models/
 ├── outputs/
 ├── data/
 └── tests/
@@ -371,11 +397,13 @@ Skin-Cancer-Detection/
 |------|---------------|
 | `configs/` | Hydra configuration tree for experiments, models, callbacks, trainers, and paths. |
 | `src/` | Core Python implementation for data loading, multimodal models, training, inference, and GBDT stacking. |
+| `src/onnx/` | ONNX export, simplification, INT8 quantization, and benchmarking utilities. |
 | `scripts/` | Utility scripts, including checkpoint download helpers. |
 | `notebooks/` | Kaggle-friendly notebooks for training, experimentation, and submission workflows. |
 | `docs/` | Long-form technical references for architecture, demo setup, and future improvements. |
 | `demo/` | Gradio application packaged as a Hugging Face Spaces-ready submodule. |
 | `checkpoints/` | Local storage for downloaded or exported model weights and trained GBDT artifacts. |
+| `onnx_models/` | Generated ONNX deployment artifacts, including FP32, simplified, preprocessed, and INT8 models. |
 | `outputs/` | Generated intermediate artifacts such as extracted GBDT feature CSVs. |
 | `data/` | Local competition files kept out of version control. |
 | `tests/` | Automated tests and helpers for validating project behavior. |

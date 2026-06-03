@@ -1,0 +1,39 @@
+# @package _global_
+
+defaults:
+  - data: isic2024
+  - paths: default
+  - hydra: default
+  - _self_
+
+task_name: "onnx_benchmark"
+
+onnx:
+  fp32: ${paths.work_dir}/onnx_models/skin_cancer_mobilenetv3_fp32_simplified.onnx
+  int8: ${paths.work_dir}/onnx_models/skin_cancer_mobilenetv3_int8.onnx
+
+inputs:
+  image: image
+  tabular: tabular
+
+runtime:
+  providers:
+    - CPUExecutionProvider
+
+benchmark:
+  warmup_batches: 5
+  max_latency_batches: 50
+
+metrics:
+  min_tpr: 0.80
+
+# This benchmark is for the exported MobileNetV3 fold-2 checkpoint:
+# checkpoints/mobilenet_v3/fold_2/epoch_009_auroc_0.9796_seed_2105170.ckpt
+# Use the same held-out fold and image size for fair FP32 vs INT8 comparison.
+data:
+  fold: 2
+  img_size: 256
+  batch_size: 16
+  num_workers: 4
+  pin_memory: false
+  persistent_workers: true

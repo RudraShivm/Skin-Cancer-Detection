@@ -1,0 +1,33 @@
+# @package _global_
+
+defaults:
+  - data: isic2024
+  - paths: default
+  - hydra: default
+  - _self_
+
+task_name: "onnx_quant"
+
+onnx:
+  input: ${paths.work_dir}/onnx_models/skin_cancer_mobilenetv3_fp32_simplified.onnx
+  preprocessed: ${paths.work_dir}/onnx_models/skin_cancer_mobilenetv3_preprocessed.onnx
+  output: ${paths.work_dir}/onnx_models/skin_cancer_mobilenetv3_int8.onnx
+
+calibration:
+  n_samples: 200
+  image_input_name: image
+  tabular_input_name: tabular
+
+quantization:
+  per_channel: true
+  weight_type: QInt8
+  activation_type: QInt8
+
+# Match the exported MobileNetV3 ONNX model. The base isic2024 data config
+# defaults to 224, while the MobileNetV3 experiment used 256.
+data:
+  img_size: 256
+  batch_size: 16
+  num_workers: 4
+  pin_memory: false
+  persistent_workers: true
